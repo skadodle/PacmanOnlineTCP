@@ -124,11 +124,11 @@ void free_variables(uint8_t *map);
 // Functions from GameplayPacman.c
 void *get_key(void *);
 void player_send_info_constructor(uint8_t count_of_players);
-void draw_map(uint8_t *map);
+void draw_map(uint8_t *map, int8_t count_of_players);
 void initialize_screen();
 void close_screen();
 void move_players(uint8_t count_of_players);
-void add_score();
+void add_score(uint8_t count_of_players);
 uint32_t start_game(uint8_t count_of_players);
 uint32_t end_of_game();
 bool check_collisions(uint8_t player_index, uint8_t direction, uint8_t count_of_players);

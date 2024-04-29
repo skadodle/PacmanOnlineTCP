@@ -158,8 +158,7 @@ void player_send_info_constructor(uint8_t count_of_players)
     players[3].player_name[0] = '\0';
 }
 
-// TODO Don't draw players when count_of_players = 1, 2, 3
-void draw_map(uint8_t *map)
+void draw_map(uint8_t *map, int8_t count_of_players)
 {
     uint16_t max_x = 0, max_y = 0;
 
@@ -188,9 +187,14 @@ void draw_map(uint8_t *map)
     mvvline(min_y, min_x + MAP_QUARTER_WIDTH * 2, ACS_VLINE, MAP_QUARTER_HEIGHT * 2); // Right line
     refresh();
 
+    for (uint8_t i = count_of_players; i < 4; i++)
+    {
+        full_map[players[i].start_x][players[i].start_y] = DOT;
+    }
+
     init_pair(1, COLOR_BLACK, COLOR_BLUE);
-    for (uint16_t x = 0; x < MAP_FULL_WIDTH; x++)
-        for (uint16_t y = 0; y < MAP_FULL_HEIGHT; y++)
+    for (uint8_t x = 0; x < MAP_FULL_WIDTH; x++)
+        for (uint8_t y = 0; y < MAP_FULL_HEIGHT; y++)
         {
             if (full_map[x][y] == WALL)
             {
@@ -202,7 +206,6 @@ void draw_map(uint8_t *map)
             {
                 mvaddch(min_y + y, min_x + x, DOT_SYMBOL);
                 total_score++;
-                continue;
             }
             else if (full_map[x][y] == PLAYER)
             {
@@ -239,9 +242,9 @@ void move_players(uint8_t count_of_players)
         mvaddch(players[i].start_y + min_y, players[i].start_x + min_x, ' ');
 }
 
-void add_score()
+void add_score(uint8_t count_of_players)
 {
-    for (uint8_t i = 0; i < 4; i++)
+    for (uint8_t i = 0; i < count_of_players; i++)
     {
         score[i] += full_map[players[i].start_x][players[i].start_y] == DOT;
         full_map[players[i].start_x][players[i].start_y] = EMPTY;
@@ -351,7 +354,7 @@ uint32_t start_game(uint8_t count_of_players)
                     players[3].start_x += 1;
                 break;
             }
-        add_score();
+        add_score(count_of_players);
         usleep(TIMESTAMP * 1000);
     }
 
@@ -435,7 +438,7 @@ void init_game(uint8_t count_of_players, uint8_t *map)
     player_send_info_constructor(count_of_players);
 
     initialize_screen();
-    draw_map(map);
+    draw_map(map, count_of_players);
 
     uint32_t status = start_game(count_of_players);
     close_screen();

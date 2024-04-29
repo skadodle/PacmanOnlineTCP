@@ -1,6 +1,5 @@
 #include "header.h"
 
-// TODO game realization and handling game logic
 uint8_t local_direction = RIGHT;
 player_send_info players[4];
 
@@ -9,6 +8,12 @@ static uint16_t min_x, min_y;
 extern bool done;
 static uint16_t score[4] = {0, 0, 0, 0};
 static uint16_t total_score = 0;
+
+// ! TEMP
+static uint16_t temp_key_0 = 0;
+static uint16_t temp_key_1 = 0;
+static uint16_t temp_key_2 = 0;
+static uint16_t temp_key_3 = 0;
 
 void *get_key(void *)
 {
@@ -19,23 +24,71 @@ void *get_key(void *)
         switch (key)
         {
         case 'w':
+            if (players[0].start_y != 0 && full_map[players[0].start_x][players[0].start_y - 1] != WALL)
+                temp_key_0 = UP;
+            break;
         case KEY_UP:
-            key = UP;
+            if (players[1].start_y != 0 && full_map[players[1].start_x][players[1].start_y - 1] != WALL)
+                temp_key_1 = UP;
+            break;
+        case 't':
+            if (players[2].start_y != 0 && full_map[players[2].start_x][players[2].start_y - 1] != WALL)
+                temp_key_2 = UP;
+            break;
+        case 'i':
+            if (players[3].start_y != 0 && full_map[players[3].start_x][players[3].start_y - 1] != WALL)
+                temp_key_3 = UP;
             break;
 
         case 'a':
+            if (players[0].start_x != 0 && full_map[players[0].start_x - 1][players[0].start_y] != WALL)
+                temp_key_0 = LEFT;
+            break;
         case KEY_LEFT:
-            key = LEFT;
+            if (players[1].start_x != 0 && full_map[players[1].start_x - 1][players[1].start_y] != WALL)
+                temp_key_1 = LEFT;
+            break;
+        case 'f':
+            if (players[2].start_x != 0 && full_map[players[2].start_x - 1][players[2].start_y] != WALL)
+                temp_key_2 = LEFT;
+            break;
+        case 'j':
+            if (players[3].start_x != 0 && full_map[players[3].start_x - 1][players[3].start_y] != WALL)
+                temp_key_3 = LEFT;
             break;
 
         case 'd':
+            if (players[0].start_x != 39 && full_map[players[0].start_x + 1][players[0].start_y] != WALL)
+                temp_key_0 = RIGHT;
+            break;
         case KEY_RIGHT:
-            key = RIGHT;
+            if (players[1].start_x != 39 && full_map[players[1].start_x + 1][players[1].start_y] != WALL)
+                temp_key_1 = RIGHT;
+            break;
+        case 'h':
+            if (players[2].start_x != 39 && full_map[players[2].start_x + 1][players[2].start_y] != WALL)
+                temp_key_2 = RIGHT;
+            break;
+        case 'l':
+            if (players[3].start_x != 39 && full_map[players[3].start_x + 1][players[3].start_y] != WALL)
+                temp_key_3 = RIGHT;
             break;
 
         case 's':
+            if (players[0].start_y != 29 && full_map[players[0].start_x][players[0].start_y + 1] != WALL)
+                temp_key_0 = DOWN;
+            break;
         case KEY_DOWN:
-            key = DOWN;
+            if (players[1].start_y != 29 && full_map[players[1].start_x][players[1].start_y + 1] != WALL)
+                temp_key_1 = DOWN;
+            break;
+        case 'g':
+            if (players[2].start_y != 29 && full_map[players[2].start_x][players[2].start_y + 1] != WALL)
+                temp_key_2 = DOWN;
+            break;
+        case 'k':
+            if (players[3].start_y != 29 && full_map[players[3].start_x][players[3].start_y + 1] != WALL)
+                temp_key_3 = DOWN;
             break;
 
         case 'q':
@@ -105,6 +158,7 @@ void player_send_info_constructor(uint8_t count_of_players)
     players[3].player_name[0] = '\0';
 }
 
+// TODO Don't draw players when count_of_players = 1, 2, 3
 void draw_map(uint8_t *map)
 {
     uint16_t max_x = 0, max_y = 0;
@@ -174,72 +228,203 @@ void close_screen()
     endwin();
 }
 
-uint8_t start_game(uint8_t count_of_players)
+void move_players(uint8_t count_of_players)
+{
+    for (uint8_t i = 0; i < count_of_players; i++)
+        mvaddch(players[i].start_y + min_y, players[i].start_x + min_x, '@');
+
+    refresh();
+
+    for (uint8_t i = 0; i < count_of_players; i++)
+        mvaddch(players[i].start_y + min_y, players[i].start_x + min_x, ' ');
+}
+
+void add_score()
+{
+    for (uint8_t i = 0; i < 4; i++)
+    {
+        score[i] += full_map[players[i].start_x][players[i].start_y] == DOT;
+        full_map[players[i].start_x][players[i].start_y] = EMPTY;
+    }
+}
+
+uint32_t start_game(uint8_t count_of_players)
 {
     uint8_t status = 0;
 
     pthread_t pid;
     pthread_create(&pid, NULL, *get_key, NULL);
 
-    key = players[0].direction;
+    // TODO Fix keys
+    temp_key_0 = players[0].direction;
+    temp_key_1 = players[1].direction;
+    temp_key_2 = players[2].direction;
+    temp_key_3 = players[3].direction;
 
     while (!done)
     {
-        mvaddch(players[0].start_y + min_y, players[0].start_x + min_x, '@');
-        refresh();
-        mvaddch(players[0].start_y + min_y, players[0].start_x + min_x, ' ');
+        move_players(count_of_players);
         if (total_score == score[0] + score[1] + score[2] + score[3])
         {
             done = true;
             break;
         }
-        switch (key)
+        switch (temp_key_0)
         {
         case UP:
-            if (players[0].start_y != 0 && full_map[players[0].start_x][players[0].start_y - 1] != WALL && check_collisions(0))
-            {
+            if (players[0].start_y != 0 && full_map[players[0].start_x][players[0].start_y - 1] != WALL && check_collisions(0, temp_key_0, count_of_players))
                 players[0].start_y -= 1;
-            }
             break;
         case DOWN:
-            if (players[0].start_y != 29 && full_map[players[0].start_x][players[0].start_y + 1] != WALL && check_collisions(0))
-            {
+            if (players[0].start_y != 29 && full_map[players[0].start_x][players[0].start_y + 1] != WALL && check_collisions(0, temp_key_0, count_of_players))
                 players[0].start_y += 1;
-            }
             break;
         case LEFT:
-            if (players[0].start_x != 0 && full_map[players[0].start_x - 1][players[0].start_y] != WALL && check_collisions(0))
-            {
+            if (players[0].start_x != 0 && full_map[players[0].start_x - 1][players[0].start_y] != WALL && check_collisions(0, temp_key_0, count_of_players))
                 players[0].start_x -= 1;
-            }
             break;
         case RIGHT:
-            if (players[0].start_x != 39 && full_map[players[0].start_x + 1][players[0].start_y] != WALL && check_collisions(0))
-            {
+            if (players[0].start_x != 39 && full_map[players[0].start_x + 1][players[0].start_y] != WALL && check_collisions(0, temp_key_0, count_of_players))
                 players[0].start_x += 1;
-            }
             break;
         }
 
-        score[0] += full_map[players[0].start_x][players[0].start_y] == DOT;
-        full_map[players[0].start_x][players[0].start_y] = EMPTY;
+        if (count_of_players >= 2 && count_of_players <= 4)
+            switch (temp_key_1)
+            {
+            case UP:
+                if (players[1].start_y != 0 && full_map[players[1].start_x][players[1].start_y - 1] != WALL && check_collisions(1, temp_key_1, count_of_players))
+                    players[1].start_y -= 1;
+                break;
+            case DOWN:
+                if (players[1].start_y != 29 && full_map[players[1].start_x][players[1].start_y + 1] != WALL && check_collisions(1, temp_key_1, count_of_players))
+                    players[1].start_y += 1;
+                break;
+            case LEFT:
+                if (players[1].start_x != 0 && full_map[players[1].start_x - 1][players[1].start_y] != WALL && check_collisions(1, temp_key_1, count_of_players))
+                    players[1].start_x -= 1;
+                break;
+            case RIGHT:
+                if (players[1].start_x != 39 && full_map[players[1].start_x + 1][players[1].start_y] != WALL && check_collisions(1, temp_key_1, count_of_players))
+                    players[1].start_x += 1;
+                break;
+            }
 
+        if (count_of_players >= 3 && count_of_players <= 4)
+            switch (temp_key_2)
+            {
+            case UP:
+                if (players[2].start_y != 0 && full_map[players[2].start_x][players[2].start_y - 1] != WALL && check_collisions(2, temp_key_2, count_of_players))
+                    players[2].start_y -= 1;
+                break;
+            case DOWN:
+                if (players[2].start_y != 29 && full_map[players[2].start_x][players[2].start_y + 1] != WALL && check_collisions(2, temp_key_2, count_of_players))
+                    players[2].start_y += 1;
+                break;
+            case LEFT:
+                if (players[2].start_x != 0 && full_map[players[2].start_x - 1][players[2].start_y] != WALL && check_collisions(2, temp_key_2, count_of_players))
+                    players[2].start_x -= 1;
+                break;
+            case RIGHT:
+                if (players[2].start_x != 39 && full_map[players[2].start_x + 1][players[2].start_y] != WALL && check_collisions(2, temp_key_2, count_of_players))
+                    players[2].start_x += 1;
+                break;
+            }
+
+        if (count_of_players == 4)
+            switch (temp_key_3)
+            {
+            case UP:
+                if (players[3].start_y != 0 && full_map[players[3].start_x][players[3].start_y - 1] != WALL && check_collisions(3, temp_key_3, count_of_players))
+                    players[3].start_y -= 1;
+                break;
+            case DOWN:
+                if (players[3].start_y != 29 && full_map[players[3].start_x][players[3].start_y + 1] != WALL && check_collisions(3, temp_key_3, count_of_players))
+                    players[3].start_y += 1;
+                break;
+            case LEFT:
+                if (players[3].start_x != 0 && full_map[players[3].start_x - 1][players[3].start_y] != WALL && check_collisions(3, temp_key_3, count_of_players))
+                    players[3].start_x -= 1;
+                break;
+            case RIGHT:
+                if (players[3].start_x != 39 && full_map[players[3].start_x + 1][players[3].start_y] != WALL && check_collisions(3, temp_key_3, count_of_players))
+                    players[3].start_x += 1;
+                break;
+            }
+        add_score();
         usleep(TIMESTAMP * 1000);
     }
 
     pthread_join(pid, NULL);
+    return end_of_game();
 }
 
-bool check_collisions(uint8_t player_index)
+uint32_t end_of_game()
+{
+    int i, j, temp;
+    uint8_t indexses[4] = {0, 1, 2, 3};
+    for (i = 0; i < 3; i++)
+    {
+        for (j = 0; j < 3 - i; j++)
+        {
+            if (score[j] > score[j + 1])
+            {
+                temp = score[j];
+                score[j] = score[j + 1];
+                score[j + 1] = temp;
+
+                temp = indexses[j];
+                indexses[j] = indexses[j + 1];
+                indexses[j + 1] = temp;
+            }
+        }
+    }
+
+    // 1 winner
+    if (score[3] > score[2])
+    {
+        return indexses[3];
+    }
+    // 2 winners
+    if (score[3] == score[2] && score[2] > score[1])
+    {
+        if (indexses[3] > indexses[2])
+            return 0xA00 + indexses[2] * 0x10 + indexses[3];
+        return 0xA00 + indexses[3] * 0x10 + indexses[2];
+    }
+    // 3 winners
+    if (score[3] == score[2] && score[2] == score[1] && score[1] > score[0])
+    {
+        if (indexses[3] > indexses[2] && indexses[2] > indexses[1])
+            return 0xA000 + indexses[1] * 0x100 + indexses[2] * 0x10 + indexses[3];
+        if (indexses[3] > indexses[1] && indexses[1] > indexses[2])
+            return 0xA000 + indexses[2] * 0x100 + indexses[1] * 0x10 + indexses[3];
+        if (indexses[2] > indexses[3] && indexses[3] > indexses[1])
+            return 0xA000 + indexses[1] * 0x100 + indexses[3] * 0x10 + indexses[2];
+        if (indexses[2] > indexses[1] && indexses[1] > indexses[3])
+            return 0xA000 + indexses[3] * 0x100 + indexses[1] * 0x10 + indexses[2];
+        if (indexses[1] > indexses[3] && indexses[3] > indexses[2])
+            return 0xA000 + indexses[2] * 0x100 + indexses[3] * 0x10 + indexses[1];
+        if (indexses[1] > indexses[2] && indexses[2] > indexses[3])
+            return 0xA000 + indexses[3] * 0x100 + indexses[2] * 0x10 + indexses[1];
+    }
+    // TIE
+    return 0xA0123;
+}
+
+bool check_collisions(uint8_t player_index, uint8_t direction, uint8_t count_of_players)
 {
     uint16_t position_i = players[player_index].start_x + players[player_index].start_y * MAP_FULL_WIDTH;
     uint16_t position_j = 0;
-    for (int j = 0; j < 4; j++)
+    for (int j = 0; j < count_of_players; j++)
     {
         if (player_index == j)
             continue;
         position_j = players[j].start_y * MAP_FULL_WIDTH + players[j].start_x;
-        if (key == UP && position_i - MAP_FULL_WIDTH == position_j || key == DOWN && position_i + MAP_FULL_WIDTH == position_j || key == LEFT && position_i - 1 == position_j || key == RIGHT && position_i + 1 == position_j)
+        if (direction == UP && position_i - MAP_FULL_WIDTH == position_j ||
+            direction == DOWN && position_i + MAP_FULL_WIDTH == position_j ||
+            direction == LEFT && position_i - 1 == position_j ||
+            direction == RIGHT && position_i + 1 == position_j)
             return false;
     }
     return true;
@@ -252,7 +437,8 @@ void init_game(uint8_t count_of_players, uint8_t *map)
     initialize_screen();
     draw_map(map);
 
-    int status = start_game(count_of_players);
+    uint32_t status = start_game(count_of_players);
+    close_screen();
 
     switch (status)
     {
@@ -268,6 +454,36 @@ void init_game(uint8_t count_of_players, uint8_t *map)
     case 3:
         printf("Player 3 - %s is win!\n", players[3].player_name);
         break;
+    case 0xA01:
+        printf("TIE Player 0 - %s and 1 - %s is win!\n", players[0].player_name, players[1].player_name);
+        break;
+    case 0xA02:
+        printf("TIE Player 0 - %s and 2 - %s is win!\n", players[0].player_name, players[2].player_name);
+        break;
+    case 0xA03:
+        printf("TIE Player 0 - %s and 3 - %s is win!\n", players[0].player_name, players[3].player_name);
+        break;
+    case 0xA12:
+        printf("TIE Player 1 - %s and 2 - %s is win!\n", players[1].player_name, players[2].player_name);
+        break;
+    case 0xA13:
+        printf("TIE Player 1 - %s and 3 - %s is win!\n", players[1].player_name, players[3].player_name);
+        break;
+    case 0xA23:
+        printf("TIE Player 2 - %s and 3 - %s is win!\n", players[2].player_name, players[3].player_name);
+        break;
+    case 0xA012:
+        printf("TIE Player 0 - %s and 1 - %s and 2 - %s is win!\n", players[0].player_name, players[1].player_name, players[2].player_name);
+        break;
+    case 0xA013:
+        printf("TIE Player 0 - %s and 1 - %s and 3 - %s is win!\n", players[0].player_name, players[1].player_name, players[3].player_name);
+        break;
+    case 0xA123:
+        printf("TIE Player 1 - %s and 2 - %s and 3 - %s is win!\n", players[1].player_name, players[2].player_name, players[3].player_name);
+        break;
+    case 0xA0123:
+        printf("TIE!\n");
+        break;
     case 0xB0:
         printf("Player 0 end game!\n");
         break;
@@ -281,10 +497,4 @@ void init_game(uint8_t count_of_players, uint8_t *map)
         printf("Player 3 end game!\n");
         break;
     }
-
-    close_screen();
-
-    printf("Score for player 0: %d\n", score[0]);
-
-    // TODO
 }

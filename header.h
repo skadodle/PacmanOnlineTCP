@@ -127,8 +127,11 @@ void player_send_info_constructor(uint8_t count_of_players);
 void draw_map(uint8_t *map);
 void initialize_screen();
 void close_screen();
-uint8_t start_game(uint8_t count_of_players);
-bool check_collisions(uint8_t player_index);
+void move_players(uint8_t count_of_players);
+void add_score();
+uint32_t start_game(uint8_t count_of_players);
+uint32_t end_of_game();
+bool check_collisions(uint8_t player_index, uint8_t direction, uint8_t count_of_players);
 void init_game(uint8_t count_of_players, uint8_t *map);
 
 // ! Global variables

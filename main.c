@@ -34,7 +34,7 @@ void free_variables(uint8_t *map)
     map = NULL;
     if (full_map != NULL)
     {
-        for (int i = 0; i < MAP_FULL_HEIGHT; i++)
+        for (int i = 0; i < MAP_FULL_WIDTH; i++)
         {
             free(full_map[i]);
             full_map[i] = NULL;

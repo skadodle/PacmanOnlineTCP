@@ -9,15 +9,8 @@ extern bool done;
 static uint16_t score[4] = {0, 0, 0, 0};
 static uint16_t total_score = 0;
 
-// ! TEMP
-static uint16_t temp_key_0 = 0;
-static uint16_t temp_key_1 = 0;
-static uint16_t temp_key_2 = 0;
-static uint16_t temp_key_3 = 0;
-
 void *get_key(void *)
 {
-    keypad(stdscr, true);
     while (!done)
     {
         key = getch();
@@ -25,70 +18,70 @@ void *get_key(void *)
         {
         case 'w':
             if (players[0].start_y != 0 && full_map[players[0].start_x][players[0].start_y - 1] != WALL)
-                temp_key_0 = UP;
+                players[0].direction = UP;
             break;
         case KEY_UP:
             if (players[1].start_y != 0 && full_map[players[1].start_x][players[1].start_y - 1] != WALL)
-                temp_key_1 = UP;
+                players[1].direction = UP;
             break;
         case 't':
             if (players[2].start_y != 0 && full_map[players[2].start_x][players[2].start_y - 1] != WALL)
-                temp_key_2 = UP;
+                players[2].direction = UP;
             break;
         case 'i':
             if (players[3].start_y != 0 && full_map[players[3].start_x][players[3].start_y - 1] != WALL)
-                temp_key_3 = UP;
+                players[3].direction = UP;
             break;
 
         case 'a':
             if (players[0].start_x != 0 && full_map[players[0].start_x - 1][players[0].start_y] != WALL)
-                temp_key_0 = LEFT;
+                players[0].direction = LEFT;
             break;
         case KEY_LEFT:
             if (players[1].start_x != 0 && full_map[players[1].start_x - 1][players[1].start_y] != WALL)
-                temp_key_1 = LEFT;
+                players[1].direction = LEFT;
             break;
         case 'f':
             if (players[2].start_x != 0 && full_map[players[2].start_x - 1][players[2].start_y] != WALL)
-                temp_key_2 = LEFT;
+                players[2].direction = LEFT;
             break;
         case 'j':
             if (players[3].start_x != 0 && full_map[players[3].start_x - 1][players[3].start_y] != WALL)
-                temp_key_3 = LEFT;
+                players[3].direction = LEFT;
             break;
 
         case 'd':
             if (players[0].start_x != 39 && full_map[players[0].start_x + 1][players[0].start_y] != WALL)
-                temp_key_0 = RIGHT;
+                players[0].direction = RIGHT;
             break;
         case KEY_RIGHT:
             if (players[1].start_x != 39 && full_map[players[1].start_x + 1][players[1].start_y] != WALL)
-                temp_key_1 = RIGHT;
+                players[1].direction = RIGHT;
             break;
         case 'h':
             if (players[2].start_x != 39 && full_map[players[2].start_x + 1][players[2].start_y] != WALL)
-                temp_key_2 = RIGHT;
+                players[2].direction = RIGHT;
             break;
         case 'l':
             if (players[3].start_x != 39 && full_map[players[3].start_x + 1][players[3].start_y] != WALL)
-                temp_key_3 = RIGHT;
+                players[3].direction = RIGHT;
             break;
 
         case 's':
             if (players[0].start_y != 29 && full_map[players[0].start_x][players[0].start_y + 1] != WALL)
-                temp_key_0 = DOWN;
+                players[0].direction = DOWN;
             break;
         case KEY_DOWN:
             if (players[1].start_y != 29 && full_map[players[1].start_x][players[1].start_y + 1] != WALL)
-                temp_key_1 = DOWN;
+                players[1].direction = DOWN;
             break;
         case 'g':
             if (players[2].start_y != 29 && full_map[players[2].start_x][players[2].start_y + 1] != WALL)
-                temp_key_2 = DOWN;
+                players[2].direction = DOWN;
             break;
         case 'k':
             if (players[3].start_y != 29 && full_map[players[3].start_x][players[3].start_y + 1] != WALL)
-                temp_key_3 = DOWN;
+                players[3].direction = DOWN;
             break;
 
         case 'q':
@@ -222,6 +215,7 @@ void initialize_screen()
     // Initialize screen
     initscr();
     noecho();
+    keypad(stdscr, true);
     curs_set(0);
     start_color();
 }
@@ -258,12 +252,6 @@ uint32_t start_game(uint8_t count_of_players)
     pthread_t pid;
     pthread_create(&pid, NULL, *get_key, NULL);
 
-    // TODO Fix keys
-    temp_key_0 = players[0].direction;
-    temp_key_1 = players[1].direction;
-    temp_key_2 = players[2].direction;
-    temp_key_3 = players[3].direction;
-
     while (!done)
     {
         move_players(count_of_players);
@@ -272,88 +260,30 @@ uint32_t start_game(uint8_t count_of_players)
             done = true;
             break;
         }
-        switch (temp_key_0)
+
+        for (uint8_t i = 0; i < count_of_players; i++)
         {
-        case UP:
-            if (players[0].start_y != 0 && full_map[players[0].start_x][players[0].start_y - 1] != WALL && check_collisions(0, temp_key_0, count_of_players))
-                players[0].start_y -= 1;
-            break;
-        case DOWN:
-            if (players[0].start_y != 29 && full_map[players[0].start_x][players[0].start_y + 1] != WALL && check_collisions(0, temp_key_0, count_of_players))
-                players[0].start_y += 1;
-            break;
-        case LEFT:
-            if (players[0].start_x != 0 && full_map[players[0].start_x - 1][players[0].start_y] != WALL && check_collisions(0, temp_key_0, count_of_players))
-                players[0].start_x -= 1;
-            break;
-        case RIGHT:
-            if (players[0].start_x != 39 && full_map[players[0].start_x + 1][players[0].start_y] != WALL && check_collisions(0, temp_key_0, count_of_players))
-                players[0].start_x += 1;
-            break;
+            switch (players[i].direction)
+            {
+            case UP:
+                if (players[i].start_y != 0 && full_map[players[i].start_x][players[i].start_y - 1] != WALL && check_collisions(i, players[i].direction, count_of_players))
+                    players[i].start_y -= 1;
+                break;
+            case DOWN:
+                if (players[i].start_y != 29 && full_map[players[i].start_x][players[i].start_y + 1] != WALL && check_collisions(i, players[i].direction, count_of_players))
+                    players[i].start_y += 1;
+                break;
+            case LEFT:
+                if (players[i].start_x != 0 && full_map[players[i].start_x - 1][players[i].start_y] != WALL && check_collisions(i, players[i].direction, count_of_players))
+                    players[i].start_x -= 1;
+                break;
+            case RIGHT:
+                if (players[i].start_x != 39 && full_map[players[i].start_x + 1][players[i].start_y] != WALL && check_collisions(i, players[i].direction, count_of_players))
+                    players[i].start_x += 1;
+                break;
+            }
         }
 
-        if (count_of_players >= 2 && count_of_players <= 4)
-            switch (temp_key_1)
-            {
-            case UP:
-                if (players[1].start_y != 0 && full_map[players[1].start_x][players[1].start_y - 1] != WALL && check_collisions(1, temp_key_1, count_of_players))
-                    players[1].start_y -= 1;
-                break;
-            case DOWN:
-                if (players[1].start_y != 29 && full_map[players[1].start_x][players[1].start_y + 1] != WALL && check_collisions(1, temp_key_1, count_of_players))
-                    players[1].start_y += 1;
-                break;
-            case LEFT:
-                if (players[1].start_x != 0 && full_map[players[1].start_x - 1][players[1].start_y] != WALL && check_collisions(1, temp_key_1, count_of_players))
-                    players[1].start_x -= 1;
-                break;
-            case RIGHT:
-                if (players[1].start_x != 39 && full_map[players[1].start_x + 1][players[1].start_y] != WALL && check_collisions(1, temp_key_1, count_of_players))
-                    players[1].start_x += 1;
-                break;
-            }
-
-        if (count_of_players >= 3 && count_of_players <= 4)
-            switch (temp_key_2)
-            {
-            case UP:
-                if (players[2].start_y != 0 && full_map[players[2].start_x][players[2].start_y - 1] != WALL && check_collisions(2, temp_key_2, count_of_players))
-                    players[2].start_y -= 1;
-                break;
-            case DOWN:
-                if (players[2].start_y != 29 && full_map[players[2].start_x][players[2].start_y + 1] != WALL && check_collisions(2, temp_key_2, count_of_players))
-                    players[2].start_y += 1;
-                break;
-            case LEFT:
-                if (players[2].start_x != 0 && full_map[players[2].start_x - 1][players[2].start_y] != WALL && check_collisions(2, temp_key_2, count_of_players))
-                    players[2].start_x -= 1;
-                break;
-            case RIGHT:
-                if (players[2].start_x != 39 && full_map[players[2].start_x + 1][players[2].start_y] != WALL && check_collisions(2, temp_key_2, count_of_players))
-                    players[2].start_x += 1;
-                break;
-            }
-
-        if (count_of_players == 4)
-            switch (temp_key_3)
-            {
-            case UP:
-                if (players[3].start_y != 0 && full_map[players[3].start_x][players[3].start_y - 1] != WALL && check_collisions(3, temp_key_3, count_of_players))
-                    players[3].start_y -= 1;
-                break;
-            case DOWN:
-                if (players[3].start_y != 29 && full_map[players[3].start_x][players[3].start_y + 1] != WALL && check_collisions(3, temp_key_3, count_of_players))
-                    players[3].start_y += 1;
-                break;
-            case LEFT:
-                if (players[3].start_x != 0 && full_map[players[3].start_x - 1][players[3].start_y] != WALL && check_collisions(3, temp_key_3, count_of_players))
-                    players[3].start_x -= 1;
-                break;
-            case RIGHT:
-                if (players[3].start_x != 39 && full_map[players[3].start_x + 1][players[3].start_y] != WALL && check_collisions(3, temp_key_3, count_of_players))
-                    players[3].start_x += 1;
-                break;
-            }
         add_score(count_of_players);
         usleep(TIMESTAMP * 1000);
     }

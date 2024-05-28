@@ -68,6 +68,11 @@ struct start
 
 ## Guide how to **build and run** the program
 ```bash
+docker build -t pacman_mine . # create docker image
+docker run --name my_docker -p 14145:14145 -d pacman_mine # create docker container and run
+docker exec -it my_docker sh # get in docker container and use sh
+```
+```bash
     make build
     make server ARGS="-p port -c count_of_players -n Name"
     make client ARGS="-p port -i ip -n Name"

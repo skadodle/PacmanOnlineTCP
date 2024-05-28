@@ -479,6 +479,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
     memcpy(player->player_name, name, player->player_name_len);
 
     fd_all[0] = server_fd;
+    bool flag_null_ter = true;
 
     for (uint8_t i = 1; i < count; i++)
     {
@@ -497,11 +498,22 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
         ssize_t size = 0;
 
         size = recv_connect(temp_player->fd, (uint8_t **)&buf);
+        flag_null_ter = true;
+
+        if (size == strlen(buf))
+        {
+            size++;
+            flag_null_ter = false;
+        }
 
         temp_player = (struct user_connect *)realloc(temp_player, sizeof(struct user_connect *) + sizeof(struct player) + size * sizeof(uint8_t));
 
         temp_player->player.player_name_len = size;
-        memcpy(temp_player->player.player_name, buf, size);
+        memcpy(temp_player->player.player_name, buf, size - (flag_null_ter == false));
+        if (flag_null_ter == false)
+        {
+            temp_player->player.player_name[size - 1] = '\0';
+        }
         free(buf);
         if (temp_player->player.player_name_len == -1)
         {

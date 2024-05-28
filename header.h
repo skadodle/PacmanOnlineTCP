@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/select.h>
+#include <fcntl.h>
 #include <getopt.h>
 
 // KEYS
@@ -46,7 +47,7 @@
 #define SEND_MAP 0x10
 #define START_GAME 0x20
 #define KEY_TO_SERVER 0x0             // * Sent key to server
-#define KET_TO_CLIENT (int)0xFFFFFFFF // * Sent key to client
+#define KEY_TO_CLIENT (int)0xFFFFFFFF // * Sent key to client
 
 #define TIMESTAMP 250 // ms
 #define MAGIC 0xABCDFE01
@@ -57,37 +58,6 @@ typedef struct _HEADER
     uint32_t ptype;
     uint32_t datasize;
 } packet_header;
-
-/*
-В C атрибут __attribute__((constructor)) используется для указания функции, которая должна быть вызвана автоматически при запуске программы, до вызова функции `main()`. Он не применяется к конструкторам структур напрямую. Однако, вы можете использовать его, чтобы вызывать ваш конструктор функцию при инициализации какой-либо глобальной переменной, которая затем будет использована как ваша структура. Вот пример:
-
-#include <stdint.h>
-#include <stdio.h>
-
-typedef struct _HEADER
-{
-    const uint32_t magic;
-    uint32_t ptype;
-    uint32_t datasize;
-} packet_header;
-
-// Конструктор для инициализации структуры
-packet_header create_packet_header(uint32_t ptype, uint32_t datasize) {
-    return (packet_header){.magic = 0xABCDFE01, .ptype = ptype, .datasize = datasize};
-}
-
-// Глобальная переменная, инициализируемая конструктором
-packet_header global_header __attribute__((constructor)) = create_packet_header(0, 0);
-
-int main() {
-    // Использование глобальной переменной
-    printf("Magic: 0x%X, Ptype: %u, Datasize: %u\n", global_header.magic, global_header.ptype, global_header.datasize);
-    return 0;
-}
-
-
-В этом примере функция create_packet_header вызывается при инициализации глобальной переменной `global_header`. Функция `create_packet_header` создает экземпляр структуры `packet_header` с соответствующими значениями, включая `magic`, и этот экземпляр используется как глобальная переменная.
- */
 
 struct packet
 {
@@ -101,29 +71,58 @@ typedef struct player
     uint32_t start_y;
     uint32_t direction;
     uint32_t player_name_len;
-    uint8_t player_name[256];
+    uint8_t player_name[];
 } __attribute__((packed)) player_send_info;
 
-struct msg
+struct start
 {
-    uint32_t players_count;
-    player_send_info *players;
     uint32_t frame_timeout;
+    uint32_t players_count;
+    player_send_info players[];
 };
 
-// * Functions for generating map (GeneratingMap.c)
+// GeneratingMap.c
 uint8_t *generate_quarter_map();
 void validate_map(uint8_t *map);
 void place_player_on_map(uint8_t *map);
 void initialize_full_map(uint8_t *map);
 
-// Functions from main.c
-int parse_args(int *argc, char **argv[]);
+// main.c
+int parse_args(int *argc, char **argv[], uint8_t **ip, uint16_t *port, uint8_t *count, uint8_t **name);
 void free_variables(uint8_t *map);
 
-// Functions from GameplayPacman.c
+// TCP.c
+int Socket(const int domain, const int type, const int protocol);
+bool Setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
+int Bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+int Listen(int sockfd, int backlog);
+int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+int Connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+ssize_t Recv(int sockfd, void *buf, size_t len, int flags);
+ssize_t Recv_header(int sockfd, uint32_t *datasize, uint32_t PTYPE);
+ssize_t Send(int sockfd, const void *buf, size_t len, int flags);
+ssize_t Send_header(int sockfd, size_t datasize, uint32_t PTYPE);
+ssize_t recv_connect(int sockfd, uint8_t **buf);
+ssize_t recv_map(int sockfd, uint8_t **map);
+ssize_t recv_ready(int sockfd);
+ssize_t recv_start(int sockfd, struct start **start_message);
+ssize_t recv_client_key(int sockfd, uint8_t *key);
+ssize_t recv_server_key(int sockfd, uint8_t *key, uint8_t **name);
+ssize_t send_connect(int sockfd, uint8_t *name, size_t nameLen);
+ssize_t send_map(int sockfd, uint8_t *map);
+ssize_t send_ready(int sockfd);
+ssize_t send_start(int sockfd, struct start *start_message, size_t total_size);
+ssize_t send_client_key(int sockfd, uint8_t key);
+ssize_t send_server_key(int sockfd, uint8_t key, uint8_t *name, uint8_t namelen);
+void Exit(uint8_t *map);
+void print_start_msg(struct start *start_message);
+uint8_t index_of_dublicate_name(uint8_t *player_name, uint8_t player_name_len);
+bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name);
+bool start_client(uint8_t *ip, uint16_t port, uint8_t *name, uint8_t **map);
+
+// GameplayPacman.c
 void *get_key(void *);
-void player_send_info_constructor(uint8_t count_of_players);
+void player_send_info_constructor(uint8_t *name);
 void draw_map(uint8_t *map, int8_t count_of_players);
 void initialize_screen();
 void close_screen();
@@ -132,12 +131,14 @@ void add_score(uint8_t count_of_players);
 uint32_t start_game(uint8_t count_of_players);
 uint32_t end_of_game();
 bool check_collisions(uint8_t player_index, uint8_t direction, uint8_t count_of_players);
-void init_game(uint8_t count_of_players, uint8_t *map);
+void init_game(uint8_t count_of_players, uint8_t *map, uint8_t *name);
 
 // ! Global variables
 extern uint16_t player_position;    // * Position of player x * 100 + y
 extern uint8_t **full_map;          // * Map 40 x 30
-extern player_send_info players[4]; // * Info about players
 extern bool done;                   // * Is game ended
+extern struct start *start_message; // * Start message
+extern size_t size_message;         // * Size of message
+extern int fd_all[4];               // * File desctriptors
 
 #endif

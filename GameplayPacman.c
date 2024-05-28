@@ -1,7 +1,9 @@
 #include "header.h"
 
-uint8_t local_direction = RIGHT;
-player_send_info players[4];
+static uint8_t x[4];
+static uint8_t y[4];
+static uint8_t direction[4];
+static uint8_t *names[4];
 
 static uint16_t key = 0;
 static uint16_t min_x, min_y;
@@ -9,146 +11,308 @@ extern bool done;
 static uint16_t score[4] = {0, 0, 0, 0};
 static uint16_t total_score = 0;
 
+extern bool isServer;
+uint8_t myIndex = 0;
+
 void *get_key(void *)
 {
+    fd_set read_fds;
+    int max_fd = 0;
+
+    for (int i = isServer ? 1 : 0; i < start_message->players_count; ++i)
+    {
+        if (fd_all[i] > max_fd)
+            max_fd = fd_all[i];
+    }
+
+    // Add stdin to the sockets
+    int std_in = fileno(stdin);
+    if (std_in > max_fd)
+        max_fd = std_in;
+
     while (!done)
     {
-        key = getch();
-        switch (key)
+        bool isChangedDir[4] = {false, false, false, false};
+        FD_ZERO(&read_fds);
+
+        // Добавляем стандартный ввод в набор файловых дескрипторов
+        FD_SET(std_in, &read_fds);
+
+        // Добавляем клиентские сокеты в набор файловых дескрипторов
+        if (isServer)
         {
-        case 'w':
-            if (players[0].start_y != 0 && full_map[players[0].start_x][players[0].start_y - 1] != WALL)
-                players[0].direction = UP;
-            break;
-        case KEY_UP:
-            if (players[1].start_y != 0 && full_map[players[1].start_x][players[1].start_y - 1] != WALL)
-                players[1].direction = UP;
-            break;
-        case 't':
-            if (players[2].start_y != 0 && full_map[players[2].start_x][players[2].start_y - 1] != WALL)
-                players[2].direction = UP;
-            break;
-        case 'i':
-            if (players[3].start_y != 0 && full_map[players[3].start_x][players[3].start_y - 1] != WALL)
-                players[3].direction = UP;
-            break;
+            for (int i = 1; i < start_message->players_count; ++i)
+                if (fd_all[i] != -1)
+                    FD_SET(fd_all[i], &read_fds);
+        }
+        else if (fd_all[1] != -1)
+            FD_SET(fd_all[1], &read_fds);
 
-        case 'a':
-            if (players[0].start_x != 0 && full_map[players[0].start_x - 1][players[0].start_y] != WALL)
-                players[0].direction = LEFT;
-            break;
-        case KEY_LEFT:
-            if (players[1].start_x != 0 && full_map[players[1].start_x - 1][players[1].start_y] != WALL)
-                players[1].direction = LEFT;
-            break;
-        case 'f':
-            if (players[2].start_x != 0 && full_map[players[2].start_x - 1][players[2].start_y] != WALL)
-                players[2].direction = LEFT;
-            break;
-        case 'j':
-            if (players[3].start_x != 0 && full_map[players[3].start_x - 1][players[3].start_y] != WALL)
-                players[3].direction = LEFT;
-            break;
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 10000; // 10 ms
 
-        case 'd':
-            if (players[0].start_x != 39 && full_map[players[0].start_x + 1][players[0].start_y] != WALL)
-                players[0].direction = RIGHT;
-            break;
-        case KEY_RIGHT:
-            if (players[1].start_x != 39 && full_map[players[1].start_x + 1][players[1].start_y] != WALL)
-                players[1].direction = RIGHT;
-            break;
-        case 'h':
-            if (players[2].start_x != 39 && full_map[players[2].start_x + 1][players[2].start_y] != WALL)
-                players[2].direction = RIGHT;
-            break;
-        case 'l':
-            if (players[3].start_x != 39 && full_map[players[3].start_x + 1][players[3].start_y] != WALL)
-                players[3].direction = RIGHT;
-            break;
+        int activity = select(max_fd + 1, &read_fds, NULL, NULL, &timeout);
 
-        case 's':
-            if (players[0].start_y != 29 && full_map[players[0].start_x][players[0].start_y + 1] != WALL)
-                players[0].direction = DOWN;
-            break;
-        case KEY_DOWN:
-            if (players[1].start_y != 29 && full_map[players[1].start_x][players[1].start_y + 1] != WALL)
-                players[1].direction = DOWN;
-            break;
-        case 'g':
-            if (players[2].start_y != 29 && full_map[players[2].start_x][players[2].start_y + 1] != WALL)
-                players[2].direction = DOWN;
-            break;
-        case 'k':
-            if (players[3].start_y != 29 && full_map[players[3].start_x][players[3].start_y + 1] != WALL)
-                players[3].direction = DOWN;
-            break;
-
-        case 'q':
-            key = 'q';
+        if (activity < 0)
+        {
+            perror("select");
             done = true;
             break;
+        }
 
-        default:
-            break;
+        // Проверяем стандартный ввод
+        if (FD_ISSET(std_in, &read_fds))
+        {
+            key = getch();
+            switch (key)
+            {
+            case 'w':
+            case KEY_UP:
+                if (y[myIndex] != 0 && full_map[x[myIndex]][y[myIndex] - 1] != WALL)
+                {
+                    direction[myIndex] = UP;
+                    isChangedDir[myIndex] = true;
+                }
+                break;
+            case 'a':
+            case KEY_LEFT:
+                if (x[myIndex] != 0 && full_map[x[myIndex] - 1][y[myIndex]] != WALL)
+                {
+                    direction[myIndex] = LEFT;
+                    isChangedDir[myIndex] = true;
+                }
+                break;
+            case 's':
+            case KEY_DOWN:
+                if (y[myIndex] != 29 && full_map[x[myIndex]][y[myIndex] + 1] != WALL)
+                {
+                    direction[myIndex] = DOWN;
+                    isChangedDir[myIndex] = true;
+                }
+                break;
+            case 'd':
+            case KEY_RIGHT:
+                if (x[myIndex] != 39 && full_map[x[myIndex] + 1][y[myIndex]] != WALL)
+                {
+                    direction[myIndex] = RIGHT;
+                    isChangedDir[myIndex] = true;
+                }
+                break;
+            case 'q':
+                done = true;
+                break;
+            default:
+                break;
+            }
+        }
+
+        if (isServer)
+        {
+            // Проверяем клиентские сокеты
+            for (int i = 1; i < start_message->players_count; ++i)
+            {
+                if (fd_all[i] != -1 && FD_ISSET(fd_all[i], &read_fds))
+                {
+                    uint8_t buffer;
+                    ssize_t bytes_received = recv_client_key(fd_all[i], &buffer);
+                    if (bytes_received > 0)
+                    {
+                        switch (buffer)
+                        {
+                        case UP:
+                            if (y[i] != 0 && full_map[x[i]][y[i] - 1] != WALL)
+                            {
+                                if (direction[i] != UP)
+                                    isChangedDir[i] = true;
+                                direction[i] = UP;
+                            }
+                            break;
+                        case LEFT:
+                            if (x[i] != 0 && full_map[x[i] - 1][y[i]] != WALL)
+                            {
+                                if (direction[i] != LEFT)
+                                    isChangedDir[i] = true;
+                                direction[i] = LEFT;
+                            }
+                            break;
+                        case DOWN:
+                            if (y[i] != 29 && full_map[x[i]][y[i] + 1] != WALL)
+                            {
+                                if (direction[i] != DOWN)
+                                    isChangedDir[i] = true;
+                                direction[i] = DOWN;
+                            }
+                            break;
+                        case RIGHT:
+                            if (x[i] != 39 && full_map[x[i] + 1][y[i]] != WALL)
+                            {
+                                if (direction[i] != RIGHT)
+                                    isChangedDir[i] = true;
+                                direction[i] = RIGHT;
+                            }
+                            break;
+                        default:
+                            break;
+                        }
+                    }
+                    else if (bytes_received == 0)
+                    {
+                        // Клиент отключился
+                        close(fd_all[i]);
+                        fd_all[i] = -1;
+                    }
+                    else if (bytes_received == -1 || bytes_received == -2)
+                    {
+                        exit(EXIT_FAILURE);
+                    }
+                }
+            }
+            // Redirect direction to all players
+            if (isChangedDir[0] || isChangedDir[1] || isChangedDir[2] || isChangedDir[3])
+            {
+                ssize_t size = 0;
+                for (uint8_t index = 0; index < 4; index++)
+                {
+                    if (isChangedDir[index])
+                    {
+                        uint8_t *name = names[index];
+                        for (int i = 1; i < start_message->players_count; ++i)
+                            if (i != index && fd_all[i] != -1)
+                            {
+                                size = send_server_key(fd_all[i], direction[index], name, strlen(name) + 1);
+                                if (size == -1)
+                                {
+                                    exit(EXIT_FAILURE);
+                                }
+                            }
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (isChangedDir[myIndex])
+            {
+                uint8_t buf = direction[myIndex];
+                ssize_t size = send_client_key(fd_all[1], buf);
+                if (size == -1)
+                {
+                    close(fd_all[1]);
+                    done = true;
+                    break;
+                }
+                isChangedDir[myIndex] = false;
+            }
+            if (fd_all[1] != -1 && FD_ISSET(fd_all[1], &read_fds))
+            {
+                uint8_t key = 0;
+                uint8_t *name;
+                ssize_t size = recv_server_key(fd_all[1], &key, &name);
+                if (size == 0)
+                {
+                    // Server disconnected
+                    close(fd_all[1]);
+                    fd_all[1] = -1;
+                    done = true;
+                    break;
+                }
+                if (size == -1 || size == -2)
+                {
+                    close(fd_all[1]);
+                    for (uint8_t i = 0; i < 4; i++)
+                    {
+                        if (names[i] != NULL)
+                            free(names[i]);
+                    }
+                    done = true;
+                    break;
+                }
+                uint8_t i = index_of_dublicate_name(name, size);
+                free(name);
+                switch (key)
+                {
+                case UP:
+                    if (y[i] != 0 && full_map[x[i]][y[i] - 1] != WALL)
+                    {
+                        if (direction[i] != UP)
+                            isChangedDir[i] = true;
+                        direction[i] = UP;
+                    }
+                    break;
+                case LEFT:
+                    if (x[i] != 0 && full_map[x[i] - 1][y[i]] != WALL)
+                    {
+                        if (direction[i] != LEFT)
+                            isChangedDir[i] = true;
+                        direction[i] = LEFT;
+                    }
+                    break;
+                case DOWN:
+                    if (y[i] != 29 && full_map[x[i]][y[i] + 1] != WALL)
+                    {
+                        if (direction[i] != DOWN)
+                            isChangedDir[i] = true;
+                        direction[i] = DOWN;
+                    }
+                    break;
+                case RIGHT:
+                    if (x[i] != 39 && full_map[x[i] + 1][y[i]] != WALL)
+                    {
+                        if (direction[i] != RIGHT)
+                            isChangedDir[i] = true;
+                        direction[i] = RIGHT;
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+        // Recalculate max_fd after potentially closing sockets
+        max_fd = std_in;
+        for (int i = isServer ? 1 : 0; i < start_message->players_count; ++i)
+        {
+            if (fd_all[i] > max_fd)
+                max_fd = fd_all[i];
         }
     }
 }
 
-void player_send_info_constructor(uint8_t count_of_players)
+void player_send_info_constructor(uint8_t *name)
 {
-    // Initialize player 0
-    players[0].start_x = player_position / 100;
-    players[0].start_y = player_position % 100;
-    players[0].direction = local_direction;
-    players[0].player_name_len = 5;
-    strncpy(players[0].player_name, "Slava", players[0].player_name_len);
-    players[0].player_name[strlen("Slava")] = '\0'; // Ensure null-terminated
-
-    count_of_players--;
-
-    // Initialize player 1
-    players[1].start_x = MAP_FULL_WIDTH - 1 - player_position / 100;
-    players[1].start_y = player_position % 100;
-    players[1].direction = LEFT;
-    players[1].player_name_len = 0; // TODO with count_of_players
-    if (count_of_players <= 0)
-        memset(players[1].player_name, 0, 256); // Ensure name is empty
-    else
+    uint8_t *ptr = (uint8_t *)start_message->players;
+    for (uint8_t i = 0; i < start_message->players_count; i++)
     {
-        // TODO
+        player_send_info *player = (player_send_info *)ptr;
+        x[i] = player->start_x;
+        y[i] = player->start_y;
+        direction[i] = player->direction;
+
+        names[i] = (char *)malloc(player->player_name_len);
+        memcpy(names[i], player->player_name, player->player_name_len);
+        if (strcmp(names[i], name) == 0)
+            myIndex = i;
+
+        ptr += sizeof(struct player) + player->player_name_len;
     }
-    players[1].player_name[0] = '\0';
 
-    count_of_players--;
+    if (start_message->players_count != 4)
+        for (uint8_t i = start_message->players_count; i < 4; i++)
+        {
+            x[i] = i % 2 == 1 ? (MAP_FULL_WIDTH - 1 - x[0]) : x[0];
+            y[i] = i < 2 ? y[0] : MAP_FULL_HEIGHT - 1 - y[0];
+            names[i] = NULL;
+        }
 
-    // Initialize player 2
-    players[2].start_x = player_position / 100;
-    players[2].start_y = MAP_FULL_HEIGHT - 1 - player_position % 100;
-    players[2].direction = RIGHT;
-    players[2].player_name_len = 0;
-    if (count_of_players <= 0)
-        memset(players[2].player_name, 0, 256); // Ensure name is empty
-    else
+    ptr = (uint8_t *)start_message->players;
+    for (uint8_t i = 0; i < start_message->players_count; i++)
     {
-        // TODO
+        player_send_info *player = (player_send_info *)ptr;
+        printf("(%d, %d), dir = %d, name_len = %d, name = %s\n",
+               x[i], y[i], direction[i], player->player_name_len, names[i]);
+        ptr += sizeof(struct player) + player->player_name_len;
     }
-    players[2].player_name[0] = '\0';
-
-    count_of_players--;
-
-    // Initialize player 3
-    players[3].start_x = MAP_FULL_WIDTH - 1 - player_position / 100;
-    players[3].start_y = MAP_FULL_HEIGHT - 1 - player_position % 100;
-    players[3].direction = LEFT;
-    players[3].player_name_len = 0;
-    if (count_of_players <= 0)
-        memset(players[3].player_name, 0, 256); // Ensure name is empty
-    else
-    {
-        // TODO
-    }
-    players[3].player_name[0] = '\0';
 }
 
 void draw_map(uint8_t *map, int8_t count_of_players)
@@ -182,7 +346,7 @@ void draw_map(uint8_t *map, int8_t count_of_players)
 
     for (uint8_t i = count_of_players; i < 4; i++)
     {
-        full_map[players[i].start_x][players[i].start_y] = DOT;
+        full_map[x[i]][y[i]] = DOT;
     }
 
     init_pair(1, COLOR_BLACK, COLOR_BLUE);
@@ -228,20 +392,20 @@ void close_screen()
 void move_players(uint8_t count_of_players)
 {
     for (uint8_t i = 0; i < count_of_players; i++)
-        mvaddch(players[i].start_y + min_y, players[i].start_x + min_x, '@');
+        mvaddch(y[i] + min_y, x[i] + min_x, '@');
 
     refresh();
 
     for (uint8_t i = 0; i < count_of_players; i++)
-        mvaddch(players[i].start_y + min_y, players[i].start_x + min_x, ' ');
+        mvaddch(y[i] + min_y, x[i] + min_x, ' ');
 }
 
 void add_score(uint8_t count_of_players)
 {
     for (uint8_t i = 0; i < count_of_players; i++)
     {
-        score[i] += full_map[players[i].start_x][players[i].start_y] == DOT;
-        full_map[players[i].start_x][players[i].start_y] = EMPTY;
+        score[i] += full_map[x[i]][y[i]] == DOT;
+        full_map[x[i]][y[i]] = EMPTY;
     }
 }
 
@@ -263,29 +427,29 @@ uint32_t start_game(uint8_t count_of_players)
 
         for (uint8_t i = 0; i < count_of_players; i++)
         {
-            switch (players[i].direction)
+            switch (direction[i])
             {
             case UP:
-                if (players[i].start_y != 0 && full_map[players[i].start_x][players[i].start_y - 1] != WALL && check_collisions(i, players[i].direction, count_of_players))
-                    players[i].start_y -= 1;
+                if (y[i] != 0 && full_map[x[i]][y[i] - 1] != WALL && check_collisions(i, direction[i], count_of_players))
+                    y[i] -= 1;
                 break;
             case DOWN:
-                if (players[i].start_y != 29 && full_map[players[i].start_x][players[i].start_y + 1] != WALL && check_collisions(i, players[i].direction, count_of_players))
-                    players[i].start_y += 1;
+                if (y[i] != 29 && full_map[x[i]][y[i] + 1] != WALL && check_collisions(i, direction[i], count_of_players))
+                    y[i] += 1;
                 break;
             case LEFT:
-                if (players[i].start_x != 0 && full_map[players[i].start_x - 1][players[i].start_y] != WALL && check_collisions(i, players[i].direction, count_of_players))
-                    players[i].start_x -= 1;
+                if (x[i] != 0 && full_map[x[i] - 1][y[i]] != WALL && check_collisions(i, direction[i], count_of_players))
+                    x[i] -= 1;
                 break;
             case RIGHT:
-                if (players[i].start_x != 39 && full_map[players[i].start_x + 1][players[i].start_y] != WALL && check_collisions(i, players[i].direction, count_of_players))
-                    players[i].start_x += 1;
+                if (x[i] != 39 && full_map[x[i] + 1][y[i]] != WALL && check_collisions(i, direction[i], count_of_players))
+                    x[i] += 1;
                 break;
             }
         }
 
         add_score(count_of_players);
-        usleep(TIMESTAMP * 1000);
+        usleep(start_message->frame_timeout * 1000);
     }
 
     pthread_join(pid, NULL);
@@ -347,13 +511,13 @@ uint32_t end_of_game()
 
 bool check_collisions(uint8_t player_index, uint8_t direction, uint8_t count_of_players)
 {
-    uint16_t position_i = players[player_index].start_x + players[player_index].start_y * MAP_FULL_WIDTH;
+    uint16_t position_i = x[player_index] + y[player_index] * MAP_FULL_WIDTH;
     uint16_t position_j = 0;
     for (int j = 0; j < count_of_players; j++)
     {
         if (player_index == j)
             continue;
-        position_j = players[j].start_y * MAP_FULL_WIDTH + players[j].start_x;
+        position_j = y[j] * MAP_FULL_WIDTH + x[j];
         if (direction == UP && position_i - MAP_FULL_WIDTH == position_j ||
             direction == DOWN && position_i + MAP_FULL_WIDTH == position_j ||
             direction == LEFT && position_i - 1 == position_j ||
@@ -363,9 +527,9 @@ bool check_collisions(uint8_t player_index, uint8_t direction, uint8_t count_of_
     return true;
 }
 
-void init_game(uint8_t count_of_players, uint8_t *map)
+void init_game(uint8_t count_of_players, uint8_t *map, uint8_t *name)
 {
-    player_send_info_constructor(count_of_players);
+    player_send_info_constructor(name);
 
     initialize_screen();
     draw_map(map, count_of_players);
@@ -376,43 +540,43 @@ void init_game(uint8_t count_of_players, uint8_t *map)
     switch (status)
     {
     case 0:
-        printf("Player 0 - %s is win!\n", players[0].player_name);
+        printf("Player 0 - %s is win!\n", names[0]);
         break;
     case 1:
-        printf("Player 1 - %s is win!\n", players[1].player_name);
+        printf("Player 1 - %s is win!\n", names[1]);
         break;
     case 2:
-        printf("Player 2 - %s is win!\n", players[2].player_name);
+        printf("Player 2 - %s is win!\n", names[2]);
         break;
     case 3:
-        printf("Player 3 - %s is win!\n", players[3].player_name);
+        printf("Player 3 - %s is win!\n", names[3]);
         break;
     case 0xA01:
-        printf("TIE Player 0 - %s and 1 - %s is win!\n", players[0].player_name, players[1].player_name);
+        printf("TIE Player 0 - %s and 1 - %s is win!\n", names[0], names[1]);
         break;
     case 0xA02:
-        printf("TIE Player 0 - %s and 2 - %s is win!\n", players[0].player_name, players[2].player_name);
+        printf("TIE Player 0 - %s and 2 - %s is win!\n", names[0], names[2]);
         break;
     case 0xA03:
-        printf("TIE Player 0 - %s and 3 - %s is win!\n", players[0].player_name, players[3].player_name);
+        printf("TIE Player 0 - %s and 3 - %s is win!\n", names[0], names[3]);
         break;
     case 0xA12:
-        printf("TIE Player 1 - %s and 2 - %s is win!\n", players[1].player_name, players[2].player_name);
+        printf("TIE Player 1 - %s and 2 - %s is win!\n", names[1], names[2]);
         break;
     case 0xA13:
-        printf("TIE Player 1 - %s and 3 - %s is win!\n", players[1].player_name, players[3].player_name);
+        printf("TIE Player 1 - %s and 3 - %s is win!\n", names[1], names[3]);
         break;
     case 0xA23:
-        printf("TIE Player 2 - %s and 3 - %s is win!\n", players[2].player_name, players[3].player_name);
+        printf("TIE Player 2 - %s and 3 - %s is win!\n", names[2], names[3]);
         break;
     case 0xA012:
-        printf("TIE Player 0 - %s and 1 - %s and 2 - %s is win!\n", players[0].player_name, players[1].player_name, players[2].player_name);
+        printf("TIE Player 0 - %s and 1 - %s and 2 - %s is win!\n", names[0], names[1], names[2]);
         break;
     case 0xA013:
-        printf("TIE Player 0 - %s and 1 - %s and 3 - %s is win!\n", players[0].player_name, players[1].player_name, players[3].player_name);
+        printf("TIE Player 0 - %s and 1 - %s and 3 - %s is win!\n", names[0], names[1], names[3]);
         break;
     case 0xA123:
-        printf("TIE Player 1 - %s and 2 - %s and 3 - %s is win!\n", players[1].player_name, players[2].player_name, players[3].player_name);
+        printf("TIE Player 1 - %s and 2 - %s and 3 - %s is win!\n", names[1], names[2], names[3]);
         break;
     case 0xA0123:
         printf("TIE!\n");
@@ -430,4 +594,7 @@ void init_game(uint8_t count_of_players, uint8_t *map)
         printf("Player 3 end game!\n");
         break;
     }
+
+    for (uint8_t i = 0; i < start_message->players_count; i++)
+        free(names[i]);
 }

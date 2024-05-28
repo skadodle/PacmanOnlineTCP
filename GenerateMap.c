@@ -6,6 +6,11 @@ uint8_t **full_map = NULL;
 uint8_t *generate_quarter_map()
 {
     uint8_t *map = (uint8_t *)malloc(sizeof(uint8_t) * MAP_QUARTER_HEIGHT * MAP_QUARTER_WIDTH);
+    if (map == NULL)
+    {
+        perror("Can't allocate memory for map!\n");
+        exit(EXIT_FAILURE);
+    }
 
     for (uint16_t i = 0; i < MAP_QUARTER_HEIGHT * MAP_QUARTER_WIDTH; i++)
     {
@@ -108,7 +113,6 @@ uint8_t *generate_quarter_map()
     place_player_on_map(map);
     initialize_full_map(map);
 
-    // draw_map(map);
     return map;
 }
 
@@ -166,6 +170,11 @@ void initialize_full_map(uint8_t *map)
 {
     // Create Double Array for full map
     full_map = (uint8_t **)malloc(sizeof(uint8_t *) * MAP_FULL_WIDTH);
+    if (full_map == NULL)
+    {
+        perror("Can't allocate memory for full map!\n");
+        Exit(map);
+    }
     for (uint8_t i = 0; i < MAP_FULL_WIDTH; i++)
     {
         full_map[i] = (uint8_t *)malloc(sizeof(uint8_t) * MAP_FULL_HEIGHT);

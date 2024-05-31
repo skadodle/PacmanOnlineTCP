@@ -119,6 +119,7 @@ void print_start_msg(struct start *start_message);
 uint8_t index_of_dublicate_name(uint8_t *player_name, uint8_t player_name_len);
 bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name);
 bool start_client(uint8_t *ip, uint16_t port, uint8_t *name, uint8_t **map);
+void log_message(char *message, char *name);
 
 // GameplayPacman.c
 void *get_key(void *);

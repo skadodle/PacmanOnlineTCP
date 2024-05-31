@@ -11,6 +11,8 @@ size_t size_message = 0;
 int fd_all[4] = {-1, -1, -1, -1};
 bool isServer = false;
 
+extern char buffer[255];
+
 int Socket(const int domain, const int type, const int protocol)
 {
     int result = socket(domain, type, protocol);
@@ -85,13 +87,13 @@ ssize_t Recv_header(int sockfd, uint32_t *datasize, uint32_t PTYPE)
 
     if (ntohl(header.magic) != MAGIC)
     {
-        printf("Wrong magic -> random packet or user use incorrect protocol!\n");
+        log_message("Wrong magic -> random packet or user use incorrect protocol!", NULL);
         return -2;
     }
 
     if (ntohl(header.ptype) != PTYPE)
     {
-        printf("Incorrect packet type -> user use incorrect protocol!\n");
+        log_message("Incorrect packet type -> user use incorrect protocol!", NULL);
         return -2;
     }
 
@@ -119,12 +121,12 @@ ssize_t Send_header(int sockfd, size_t datasize, uint32_t PTYPE)
         return 0;
     if (size == -1)
     {
-        printf("Can't send the whole packet header!\n");
+        log_message("Can't send the whole packet header!", NULL);
         return -1;
     }
     else if (size != sizeof(header))
     {
-        printf("Can't send the whole packet header! size != sizeof(header)\n");
+        log_message("Can't send the whole packet header! size != sizeof(header)", NULL);
         return -1;
     }
 
@@ -159,7 +161,7 @@ ssize_t recv_map(int sockfd, uint8_t **map)
     *map = (uint8_t *)malloc(sizeof(uint8_t) * datasize);
     if (map == NULL)
     {
-        printf("Map malloc failure\n");
+        perror("Map malloc failure\n");
         exit(EXIT_FAILURE);
     }
 
@@ -181,7 +183,7 @@ ssize_t recv_ready(int sockfd)
 
     if (datasize != 0)
     {
-        printf("Incorrect packet size -> user use incorrect protocol!\n");
+        log_message("Incorrect packet size -> user use incorrect protocol!", NULL);
         return -2;
     }
 
@@ -199,7 +201,7 @@ ssize_t recv_start(int sockfd, struct start **start_message)
 
     if (datasize == 0)
     {
-        printf("Incorrect packet size -> user use incorrect protocol!\n");
+        log_message("Incorrect packet size -> user use incorrect protocol!", NULL);
         return -2;
     }
 
@@ -243,7 +245,7 @@ ssize_t recv_client_key(int sockfd, uint8_t *key)
 
     if (datasize != 1)
     {
-        printf("Incorrect packet size -> user use incorrect protocol!\n");
+        log_message("Incorrect packet size -> user use incorrect protocol!", NULL);
         return -2;
     }
 
@@ -263,7 +265,7 @@ ssize_t recv_server_key(int sockfd, uint8_t *key, uint8_t **name)
 
     if (datasize == 0)
     {
-        printf("Incorrect packet size -> user use incorrect protocol!\n");
+        log_message("Incorrect packet size -> user use incorrect protocol!", NULL);
         return -2;
     }
 
@@ -292,7 +294,7 @@ ssize_t send_connect(int sockfd, uint8_t *name, size_t nameLen)
     size = Send(sockfd, name, nameLen, 0);
     if (size == -1 || size != nameLen)
     {
-        printf("Can't send the name!\n");
+        log_message("Can't send the name!", NULL);
         return -1;
     }
 
@@ -310,7 +312,7 @@ ssize_t send_map(int sockfd, uint8_t *map)
     size = Send(sockfd, map, MAP_QUARTER_HEIGHT * MAP_QUARTER_WIDTH, 0);
     if (size == -1 || size != MAP_QUARTER_HEIGHT * MAP_QUARTER_WIDTH)
     {
-        printf("Can't send the map!\n");
+        log_message("Can't send the map!", NULL);
         return -1;
     }
 
@@ -339,7 +341,7 @@ ssize_t send_start(int sockfd, struct start *start_message, size_t total_size)
     size = Send(sockfd, start_message, total_size, 0);
     if (size == -1 || size != total_size)
     {
-        printf("Can't send the start message!\n");
+        log_message("Can't send the start message!", NULL);
         return -1;
     }
 
@@ -356,7 +358,7 @@ ssize_t send_client_key(int sockfd, uint8_t key)
     size = Send(sockfd, &key, 1, 0);
     if (size == -1 || size != 1)
     {
-        printf("Can't send the key!\n");
+        log_message("Can't send the key!", NULL);
         return -1;
     }
 
@@ -371,13 +373,15 @@ ssize_t send_server_key(int sockfd, uint8_t key, uint8_t *name, uint8_t namelen)
     size = Send(sockfd, &key, 1, 0);
     if (size == -1 || size != 1)
     {
-        printf("Can't send the key!\n");
+        log_message("Can't send the key!", NULL);
         return -1;
     }
     size = Send(sockfd, name, namelen, 0);
+    sprintf(buffer, "Send server key with namelen = %d and name = %s", namelen, name);
+    log_message(buffer, NULL);
     if (size == -1 || size != namelen)
     {
-        printf("Can't send the name!\n");
+        log_message("Can't send the name!", NULL);
         return -1;
     }
     return 0;
@@ -415,13 +419,13 @@ uint8_t index_of_dublicate_name(uint8_t *player_name, uint8_t player_name_len)
     for (int i = 0; i < start_message->players_count; i++)
     {
         player_send_info *player = (player_send_info *)ptr;
+        if (player->player_name_len == 0)
+            break;
 
-        if (player->player_name_len == player_name_len && strcmp(player_name, player->player_name) == 0)
+        if (player->player_name_len == player_name_len && memcmp(player_name, player->player_name, player_name_len) == 0)
             return i;
 
         ptr += sizeof(player_send_info) + player->player_name_len;
-        if (player->player_name_len == 0)
-            break;
     }
 
     return 10;
@@ -462,7 +466,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
     start_message->players_count = count;
 
     // Add server as player
-    player_size = sizeof(player_send_info) + strlen(name) + 1;
+    player_size = sizeof(player_send_info) + strlen((const char *)name) + 1;
     total_size += player_size;
     start_message = (struct start *)realloc(start_message, total_size);
     if (start_message == NULL)
@@ -475,11 +479,12 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
     player->start_x = player_position / 100;
     player->start_y = player_position % 100;
     player->direction = RIGHT;
-    player->player_name_len = strlen(name) + 1;
+    player->player_name_len = strlen((const char *)name) + 1;
     memcpy(player->player_name, name, player->player_name_len);
 
     fd_all[0] = server_fd;
-    bool flag_null_ter = true;
+
+    printf("GOOD!\n");
 
     for (uint8_t i = 1; i < count; i++)
     {
@@ -498,23 +503,19 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
         ssize_t size = 0;
 
         size = recv_connect(temp_player->fd, (uint8_t **)&buf);
-        flag_null_ter = true;
 
-        if (size == strlen(buf))
-        {
-            size++;
-            flag_null_ter = false;
-        }
+        printf("GOOD!\n");
 
         temp_player = (struct user_connect *)realloc(temp_player, sizeof(struct user_connect *) + sizeof(struct player) + size * sizeof(uint8_t));
 
+        printf("GOOD!\n");
+
         temp_player->player.player_name_len = size;
-        memcpy(temp_player->player.player_name, buf, size - (flag_null_ter == false));
-        if (flag_null_ter == false)
-        {
-            temp_player->player.player_name[size - 1] = '\0';
-        }
+        printf("GOOD!\n");
+        memcpy(temp_player->player.player_name, buf, size);
+        printf("GOOD!\n");
         free(buf);
+        printf("GOOD!\n");
         if (temp_player->player.player_name_len == -1)
         {
             i--;
@@ -528,6 +529,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
             free(temp_player);
             continue;
         }
+        printf("GOOD before dublicate!\n");
 
         if (index_of_dublicate_name(temp_player->player.player_name, temp_player->player.player_name_len) != 10)
         {
@@ -537,6 +539,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
             free(temp_player);
             continue;
         }
+        printf("GOOD after dublicate!\n");
 
         printf("Connect Player: %s\n", temp_player->player.player_name);
 
@@ -544,7 +547,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
         if (size == -1 || size != MAP_QUARTER_HEIGHT * MAP_QUARTER_WIDTH)
         {
             i--;
-            printf("Can't send map\n");
+            log_message("Can't send map", NULL);
             close(temp_player->fd);
             free(temp_player);
             continue;
@@ -572,7 +575,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
         player->start_x = i % 2 == 1 ? (MAP_FULL_WIDTH - 1 - player_position / 100) : player_position / 100;
         player->start_y = i < 2 ? player_position % 100 : MAP_FULL_HEIGHT - 1 - player_position % 100;
         player->direction = i % 2 == 1 ? LEFT : RIGHT;
-        player->player_name_len = strlen(temp_player->player.player_name) + 1;
+        player->player_name_len = temp_player->player.player_name_len;
         memcpy(player->player_name, temp_player->player.player_name, player->player_name_len);
         // printf("x = %d\t", player->start_x);
         // printf("y = %d\t", player->start_y);
@@ -609,7 +612,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
         ssize_t size = send_start(fd_all[i], start_message, total_size);
         if (size == -1)
         {
-            printf("Can't send start\n");
+            log_message("Can't send start", NULL);
             close(fd_all[i]);
             continue;
         }
@@ -634,6 +637,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
     }
 
     size_message = total_size;
+    return false;
 }
 
 bool start_client(uint8_t *ip, uint16_t port, uint8_t *name, uint8_t **map)
@@ -645,12 +649,12 @@ bool start_client(uint8_t *ip, uint16_t port, uint8_t *name, uint8_t **map)
     struct sockaddr_in address;
     address.sin_family = AF_INET;
     address.sin_port = htons(port);
-    address.sin_addr.s_addr = inet_addr(ip);
+    address.sin_addr.s_addr = inet_addr((const char *)ip);
 
     if (Connect(server_fd, (struct sockaddr *)&address, sizeof(address)) == -1)
         exit(EXIT_FAILURE);
 
-    if (send_connect(server_fd, name, strlen(name) + 1) == -1)
+    if (send_connect(server_fd, name, strlen((const char *)name) + 1) == -1)
         exit(EXIT_FAILURE);
 
     ssize_t size = recv_map(server_fd, map);
@@ -672,4 +676,28 @@ bool start_client(uint8_t *ip, uint16_t port, uint8_t *name, uint8_t **map)
     fd_all[1] = server_fd;
 
     return true;
+}
+
+void log_message(char *message, char *name)
+{
+    char filename[100];
+    if (!isServer)
+        sprintf(filename, "logsClient%s.txt", name);
+    const char *log_filename = isServer ? "logsServer.txt" : filename;
+    FILE *file = fopen(log_filename, "a"); // Открываем файл на дозапись
+    if (file == NULL)
+    {
+        perror("Error opening file");
+        return;
+    }
+
+    // Получаем текущее время
+    time_t now;
+    time(&now);
+    char *time_str = ctime(&now);
+    time_str[strlen(time_str) - 1] = '\0'; // Удаляем символ новой строки
+
+    // Записываем время и сообщение в файл
+    fprintf(file, "[%s] %s\n", time_str, message);
+    fclose(file); // Закрываем файл
 }

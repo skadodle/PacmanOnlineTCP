@@ -5,12 +5,14 @@ bool done = false;
 int parse_args(int *argc, char **argv[], uint8_t **ip, uint16_t *port, uint8_t *count, uint8_t **name)
 {
     int r = 0;
+    uint8_t cot = 0;
     while ((r = getopt(*argc, *argv, "i:p:c:n:")) != -1)
     {
         switch (r)
         {
         case 'i':
-            (*ip) = optarg;
+            (*ip) = (uint8_t *)optarg;
+            cot++;
             break;
         case 'p':
             if (atoi(optarg) <= 0)
@@ -19,18 +21,21 @@ int parse_args(int *argc, char **argv[], uint8_t **ip, uint16_t *port, uint8_t *
                 return 1;
             }
             (*port) = atoi(optarg);
+            cot++;
             break;
         case 'c':
             (*count) = atoi(optarg);
+            cot++;
             break;
         case 'n':
-            (*name) = optarg;
+            (*name) = (uint8_t *)optarg;
+            cot++;
             break;
         default:
             return 1;
         }
     }
-    return 0;
+    return cot == 0 ? 1 : 0;
 }
 
 void free_variables(uint8_t *map)
@@ -55,7 +60,7 @@ int main(int argc, char **argv)
     uint16_t port = 0;
     uint8_t *ip = NULL;
     uint8_t count = 0;
-    uint8_t *name = "Slava\0";
+    uint8_t *name = (uint8_t *)"Slava\0";
 
     uint8_t *map = NULL;
 
@@ -65,7 +70,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (ip != NULL && count != 0)
+    if (ip == NULL && count == 0)
     {
         printf("Invalid arguments! Don't use flags -i and -c together!\n");
         return 1;

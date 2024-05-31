@@ -4,6 +4,7 @@ static uint8_t x[4];
 static uint8_t y[4];
 static uint8_t direction[4];
 static uint8_t *names[4];
+static uint8_t names_len[4];
 
 static uint16_t key = 0;
 static uint16_t min_x, min_y;
@@ -13,6 +14,8 @@ static uint16_t total_score = 0;
 
 extern bool isServer;
 uint8_t myIndex = 0;
+
+char buffer[255];
 
 void *get_key(void *)
 {
@@ -176,11 +179,10 @@ void *get_key(void *)
                 {
                     if (isChangedDir[index])
                     {
-                        uint8_t *name = names[index];
                         for (int i = 1; i < start_message->players_count; ++i)
                             if (i != index && fd_all[i] != -1)
                             {
-                                size = send_server_key(fd_all[i], direction[index], name, strlen(name) + 1);
+                                size = send_server_key(fd_all[i], direction[index], names[index], names_len[index]);
                                 if (size == -1)
                                 {
                                     exit(EXIT_FAILURE);
@@ -196,6 +198,8 @@ void *get_key(void *)
             {
                 uint8_t buf = direction[myIndex];
                 ssize_t size = send_client_key(fd_all[1], buf);
+                sprintf(buffer, "Send key to server %d!", buf);
+                log_message(buffer, (char *)names[myIndex]);
                 if (size == -1)
                 {
                     close(fd_all[1]);
@@ -209,6 +213,8 @@ void *get_key(void *)
                 uint8_t key = 0;
                 uint8_t *name;
                 ssize_t size = recv_server_key(fd_all[1], &key, &name);
+                sprintf(buffer, "Receive server key = %d from server and name = %s and size = %ld", key, name, size);
+                log_message(buffer, (char *)names[myIndex]);
                 if (size == 0)
                 {
                     // Server disconnected
@@ -229,6 +235,8 @@ void *get_key(void *)
                     break;
                 }
                 uint8_t i = index_of_dublicate_name(name, size);
+                sprintf(buffer, "Player with name: %s, index = %d", name, i);
+                log_message(buffer, (char *)names[myIndex]);
                 free(name);
                 switch (key)
                 {
@@ -277,6 +285,7 @@ void *get_key(void *)
                 max_fd = fd_all[i];
         }
     }
+    return NULL;
 }
 
 void player_send_info_constructor(uint8_t *name)
@@ -288,10 +297,11 @@ void player_send_info_constructor(uint8_t *name)
         x[i] = player->start_x;
         y[i] = player->start_y;
         direction[i] = player->direction;
+        names_len[i] = player->player_name_len;
 
-        names[i] = (char *)malloc(player->player_name_len);
+        names[i] = (uint8_t *)malloc(player->player_name_len);
         memcpy(names[i], player->player_name, player->player_name_len);
-        if (strcmp(names[i], name) == 0)
+        if (strcmp((const char *)names[i], (const char *)name) == 0)
             myIndex = i;
 
         ptr += sizeof(struct player) + player->player_name_len;
@@ -302,6 +312,7 @@ void player_send_info_constructor(uint8_t *name)
         {
             x[i] = i % 2 == 1 ? (MAP_FULL_WIDTH - 1 - x[0]) : x[0];
             y[i] = i < 2 ? y[0] : MAP_FULL_HEIGHT - 1 - y[0];
+            names_len[i] = 0;
             names[i] = NULL;
         }
 
@@ -411,8 +422,6 @@ void add_score(uint8_t count_of_players)
 
 uint32_t start_game(uint8_t count_of_players)
 {
-    uint8_t status = 0;
-
     pthread_t pid;
     pthread_create(&pid, NULL, *get_key, NULL);
 
@@ -518,10 +527,10 @@ bool check_collisions(uint8_t player_index, uint8_t direction, uint8_t count_of_
         if (player_index == j)
             continue;
         position_j = y[j] * MAP_FULL_WIDTH + x[j];
-        if (direction == UP && position_i - MAP_FULL_WIDTH == position_j ||
-            direction == DOWN && position_i + MAP_FULL_WIDTH == position_j ||
-            direction == LEFT && position_i - 1 == position_j ||
-            direction == RIGHT && position_i + 1 == position_j)
+        if ((direction == UP && position_i - MAP_FULL_WIDTH == position_j) ||
+            (direction == DOWN && position_i + MAP_FULL_WIDTH == position_j) ||
+            (direction == LEFT && position_i - 1 == position_j) ||
+            (direction == RIGHT && position_i + 1 == position_j))
             return false;
     }
     return true;

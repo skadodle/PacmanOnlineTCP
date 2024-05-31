@@ -484,8 +484,6 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
 
     fd_all[0] = server_fd;
 
-    printf("GOOD!\n");
-
     for (uint8_t i = 1; i < count; i++)
     {
         NEW_LINE
@@ -504,18 +502,11 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
 
         size = recv_connect(temp_player->fd, (uint8_t **)&buf);
 
-        printf("GOOD!\n");
-
         temp_player = (struct user_connect *)realloc(temp_player, sizeof(struct user_connect *) + sizeof(struct player) + size * sizeof(uint8_t));
 
-        printf("GOOD!\n");
-
         temp_player->player.player_name_len = size;
-        printf("GOOD!\n");
         memcpy(temp_player->player.player_name, buf, size);
-        printf("GOOD!\n");
         free(buf);
-        printf("GOOD!\n");
         if (temp_player->player.player_name_len == -1)
         {
             i--;
@@ -529,8 +520,6 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
             free(temp_player);
             continue;
         }
-        printf("GOOD before dublicate!\n");
-
         if (index_of_dublicate_name(temp_player->player.player_name, temp_player->player.player_name_len) != 10)
         {
             printf("Player with name %s already exists! Abort player!\n", temp_player->player.player_name);
@@ -539,7 +528,6 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
             free(temp_player);
             continue;
         }
-        printf("GOOD after dublicate!\n");
 
         printf("Connect Player: %s\n", temp_player->player.player_name);
 

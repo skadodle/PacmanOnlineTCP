@@ -463,7 +463,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
     }
 
     start_message->frame_timeout = TIMESTAMP;
-    start_message->players_count = count;
+    start_message->players_count = 1;
 
     // Add server as player
     player_size = sizeof(player_send_info) + strlen((const char *)name) + 1;
@@ -552,6 +552,7 @@ bool start_server(uint16_t port, uint8_t count, uint8_t *map, uint8_t *name)
         }
 
         total_size += sizeof(player_send_info) + temp_player->player.player_name_len;
+        start_message->players_count++;
         start_message = (struct start *)realloc(start_message, total_size);
         if (start_message == NULL)
         {

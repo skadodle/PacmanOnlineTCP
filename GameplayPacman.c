@@ -13,12 +13,16 @@ static uint16_t score[4] = {0, 0, 0, 0};
 static uint16_t total_score = 0;
 
 extern bool isServer;
-uint8_t myIndex = 0;
+static uint8_t myIndex = 0;
+
+static struct timeval start_time = {0};
 
 char buffer[255];
 
 void *get_key(void *)
 {
+    struct timeval time = {0};
+
     fd_set read_fds;
     int max_fd = 0;
 
@@ -68,6 +72,14 @@ void *get_key(void *)
         if (FD_ISSET(std_in, &read_fds))
         {
             key = getch();
+            gettimeofday(&time, NULL);
+
+            if (TIME_TO_SLEEP_CHECK(CALCULATE_TIME_DIFF_MS(start_time, time)))
+                TIME_TO_SLEEP_ACTION(CALCULATE_TIME_DIFF_MS(start_time, time));
+
+            sprintf(buffer, "\tKEY  --%lu ms-- \n", CALCULATE_TIME_DIFF_MS(start_time, time));
+            log_message((char *)buffer, (char *)names[myIndex]);
+
             switch (key)
             {
             case 'w':
@@ -112,6 +124,21 @@ void *get_key(void *)
 
         if (isServer)
         {
+            if (isChangedDir[0])
+            {
+                for (uint8_t i = 1; i < start_message->players_count; i++)
+                {
+                    if (fd_all[i] != -1)
+                    {
+                        ssize_t size = send_server_key(fd_all[i], direction[0], names[0], names_len[0]);
+                        if (size == -1)
+                        {
+                            exit(EXIT_FAILURE);
+                        }
+                    }
+                }
+            }
+
             // Проверяем клиентские сокеты
             for (int i = 1; i < start_message->players_count; ++i)
             {
@@ -172,7 +199,7 @@ void *get_key(void *)
                 }
             }
             // Redirect direction to all players
-            if (isChangedDir[0] || isChangedDir[1] || isChangedDir[2] || isChangedDir[3])
+            if (isChangedDir[1] || isChangedDir[2] || isChangedDir[3])
             {
                 ssize_t size = 0;
                 for (uint8_t index = 0; index < 4; index++)
@@ -425,40 +452,59 @@ uint32_t start_game(uint8_t count_of_players)
     pthread_t pid;
     pthread_create(&pid, NULL, *get_key, NULL);
 
+    struct timeval frame_time = {0};
+    gettimeofday(&start_time, NULL);
+
     while (!done)
     {
-        move_players(count_of_players);
-        if (total_score == score[0] + score[1] + score[2] + score[3])
+        /*sprintf(buffer, "took %lu ms \n", ((start_frame.tv_sec - end_frame.tv_sec) * 1000000 + start_full_frame.tv_usec - end_full_frame.tv_usec) / 1000); */
+        /*log_message((char *)buffer, NULL);*/
+        gettimeofday(&frame_time, NULL);
+        if (((frame_time.tv_sec - start_time.tv_sec) * 1000000 + frame_time.tv_usec - start_time.tv_usec) / 1000 >= start_message->frame_timeout)
         {
-            done = true;
-            break;
-        }
+            sprintf(buffer, "took %lu ms \n", ((frame_time.tv_sec - start_time.tv_sec) * 1000000 + frame_time.tv_usec - start_time.tv_usec) / 1000);
+            log_message((char *)buffer, (char *)names[myIndex]);
 
-        for (uint8_t i = 0; i < count_of_players; i++)
-        {
-            switch (direction[i])
+            start_time.tv_sec = frame_time.tv_sec;
+            start_time.tv_usec = frame_time.tv_usec;
+            move_players(count_of_players);
+            if (total_score == score[0] + score[1] + score[2] + score[3])
             {
-            case UP:
-                if (y[i] != 0 && full_map[x[i]][y[i] - 1] != WALL && check_collisions(i, direction[i], count_of_players))
-                    y[i] -= 1;
-                break;
-            case DOWN:
-                if (y[i] != 29 && full_map[x[i]][y[i] + 1] != WALL && check_collisions(i, direction[i], count_of_players))
-                    y[i] += 1;
-                break;
-            case LEFT:
-                if (x[i] != 0 && full_map[x[i] - 1][y[i]] != WALL && check_collisions(i, direction[i], count_of_players))
-                    x[i] -= 1;
-                break;
-            case RIGHT:
-                if (x[i] != 39 && full_map[x[i] + 1][y[i]] != WALL && check_collisions(i, direction[i], count_of_players))
-                    x[i] += 1;
+                done = true;
                 break;
             }
-        }
 
-        add_score(count_of_players);
-        usleep(start_message->frame_timeout * 1000);
+            for (uint8_t i = 0; i < count_of_players; i++)
+            {
+                switch (direction[i])
+                {
+                case UP:
+                    if (y[i] != 0 && full_map[x[i]][y[i] - 1] != WALL && check_collisions(i, direction[i], count_of_players))
+                        y[i] -= 1;
+                    break;
+                case DOWN:
+                    if (y[i] != 29 && full_map[x[i]][y[i] + 1] != WALL && check_collisions(i, direction[i], count_of_players))
+                        y[i] += 1;
+                    break;
+                case LEFT:
+                    if (x[i] != 0 && full_map[x[i] - 1][y[i]] != WALL && check_collisions(i, direction[i], count_of_players))
+                        x[i] -= 1;
+                    break;
+                case RIGHT:
+                    if (x[i] != 39 && full_map[x[i] + 1][y[i]] != WALL && check_collisions(i, direction[i], count_of_players))
+                        x[i] += 1;
+                    break;
+                }
+            }
+
+            add_score(count_of_players);
+        }
+        gettimeofday(&frame_time, NULL);
+        if (((frame_time.tv_sec - start_time.tv_sec) * 1000000 + frame_time.tv_usec - start_time.tv_usec) / 1000 < start_message->frame_timeout / 50)
+            usleep(start_message->frame_timeout - ((frame_time.tv_sec - start_time.tv_sec) * 1000000 + frame_time.tv_usec - start_time.tv_usec) / 1000);
+        else
+            usleep(start_message->frame_timeout / 50);
+        /*usleep(start_message->frame_timeout * 1000 - ((end_of_frame.tv_sec - start_of_frame.tv_sec) * 1000000 + end_of_frame.tv_usec - start_of_frame.tv_usec));*/
     }
 
     pthread_join(pid, NULL);

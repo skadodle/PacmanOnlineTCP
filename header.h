@@ -4,7 +4,6 @@
 // Libraries
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -14,7 +13,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/select.h>
-#include <fcntl.h>
+#include <sys/time.h>
 #include <getopt.h>
 
 // KEYS
@@ -49,7 +48,23 @@
 #define KEY_TO_SERVER 0x0             // * Sent key to server
 #define KEY_TO_CLIENT (int)0xFFFFFFFF // * Sent key to client
 
-#define TIMESTAMP 250 // ms
+// Macros for getting ms from start of frame
+#define CALCULATE_TIME_DIFF_MS(start, end) \
+    (((end).tv_sec - (start).tv_sec) * 1000 + ((end).tv_usec - (start).tv_usec) / 1000)
+
+// Macros for check is need to sleep
+#define TIME_TO_SLEEP_CHECK(time) ((start_message->frame_timeout * 3 / 4) <= (time))
+
+// Macros for sleep and log
+#define TIME_TO_SLEEP_ACTION(time)                                                              \
+    do                                                                                          \
+    {                                                                                           \
+        sprintf(buffer, "For %lu \twait %ld ms\n", (time), TIMESTAMP - (time) + TIMESTAMP / 4); \
+        log_message(buffer, names[myIndex]);                                                    \
+        usleep((TIMESTAMP - (time) + TIMESTAMP / 4) * 1000);                                    \
+    } while (0)
+
+#define TIMESTAMP 350 // ms
 #define MAGIC 0xABCDFE01
 // __ Structs for TCP
 typedef struct _HEADER

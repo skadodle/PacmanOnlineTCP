@@ -1,6 +1,8 @@
 #include "header.h"
 
 bool done = false;
+// DELETE START TIME
+extern struct timeval full_time;
 
 int parse_args(int *argc, char **argv[], uint8_t **ip, uint16_t *port, uint8_t *count, uint8_t **name)
 {
@@ -98,6 +100,8 @@ int main(int argc, char **argv)
 
     NEW_LINE
     NEW_LINE
+
+    gettimeofday(&full_time, NULL);
 
     if (map != NULL)
         init_game(start_message->players_count, map, name);

@@ -6,6 +6,8 @@ static uint8_t direction[4];
 static uint8_t *names[4];
 static uint8_t names_len[4];
 
+uint64_t frame_count = 0;
+
 static uint16_t key = 0;
 static uint16_t min_x, min_y;
 extern bool done;
@@ -15,9 +17,22 @@ static uint16_t total_score = 0;
 extern bool isServer;
 static uint8_t myIndex = 0;
 
-static struct timeval start_time = {0};
+struct timeval start_time = {0};
+struct timeval full_time = {0};
 
 char buffer[255];
+
+void add_timeval(struct timeval *start_time)
+{
+    start_time->tv_usec += start_message->frame_timeout * 1000;
+
+    // Если количество микросекунд превысило 1 миллион, переведем их в секунды
+    if (start_time->tv_usec >= 1000000)
+    {
+        start_time->tv_sec += start_time->tv_usec / 1000000;
+        start_time->tv_usec %= 1000000;
+    }
+}
 
 void *get_key(void *)
 {
@@ -26,7 +41,9 @@ void *get_key(void *)
     fd_set read_fds;
     int max_fd = 0;
 
-    for (int i = isServer ? 1 : 0; i < start_message->players_count; ++i)
+    bool isKey = false;
+
+    for (int i = 0; i < start_message->players_count; ++i)
     {
         if (fd_all[i] > max_fd)
             max_fd = fd_all[i];
@@ -46,18 +63,13 @@ void *get_key(void *)
         FD_SET(std_in, &read_fds);
 
         // Добавляем клиентские сокеты в набор файловых дескрипторов
-        if (isServer)
-        {
-            for (int i = 1; i < start_message->players_count; ++i)
-                if (fd_all[i] != -1)
-                    FD_SET(fd_all[i], &read_fds);
-        }
-        else if (fd_all[1] != -1)
-            FD_SET(fd_all[1], &read_fds);
+        for (int i = 1; i < start_message->players_count; ++i)
+            if (fd_all[i] != -1)
+                FD_SET(fd_all[i], &read_fds);
 
         struct timeval timeout;
         timeout.tv_sec = 0;
-        timeout.tv_usec = 10000; // 10 ms
+        timeout.tv_usec = 1000; // 1 ms
 
         int activity = select(max_fd + 1, &read_fds, NULL, NULL, &timeout);
 
@@ -72,46 +84,53 @@ void *get_key(void *)
         if (FD_ISSET(std_in, &read_fds))
         {
             key = getch();
+
             gettimeofday(&time, NULL);
-
-            if (TIME_TO_SLEEP_CHECK(CALCULATE_TIME_DIFF_MS(start_time, time)))
-                TIME_TO_SLEEP_ACTION(CALCULATE_TIME_DIFF_MS(start_time, time));
-
-            sprintf(buffer, "\tKEY  --%lu ms-- \n", CALCULATE_TIME_DIFF_MS(start_time, time));
+            sprintf(buffer, "\tKEY = %d - %c  --%lu ms-- \n", (uint16_t)key, (char)key, CALCULATE_TIME_DIFF_MS(start_time, time));
             log_message((char *)buffer, (char *)names[myIndex]);
+            isKey = true;
+        }
 
+        gettimeofday(&time, NULL);
+        if ((TIME_TO_SLEEP_CHECK(CALCULATE_TIME_DIFF_MS(start_time, time))) && isKey)
+        {
+            isKey = false;
             switch (key)
             {
             case 'w':
             case KEY_UP:
                 if (y[myIndex] != 0 && full_map[x[myIndex]][y[myIndex] - 1] != WALL)
                 {
+                    if (direction[myIndex] != UP)
+                        isChangedDir[myIndex] = true;
                     direction[myIndex] = UP;
-                    isChangedDir[myIndex] = true;
                 }
                 break;
             case 'a':
             case KEY_LEFT:
                 if (x[myIndex] != 0 && full_map[x[myIndex] - 1][y[myIndex]] != WALL)
                 {
+                    if (direction[myIndex] != LEFT)
+                        isChangedDir[myIndex] = true;
                     direction[myIndex] = LEFT;
-                    isChangedDir[myIndex] = true;
                 }
                 break;
             case 's':
             case KEY_DOWN:
                 if (y[myIndex] != 29 && full_map[x[myIndex]][y[myIndex] + 1] != WALL)
                 {
+                    if (direction[myIndex] != DOWN)
+                        isChangedDir[myIndex] = true;
                     direction[myIndex] = DOWN;
-                    isChangedDir[myIndex] = true;
                 }
                 break;
             case 'd':
             case KEY_RIGHT:
                 if (x[myIndex] != 39 && full_map[x[myIndex] + 1][y[myIndex]] != WALL)
                 {
+                    if (direction[myIndex] != RIGHT)
+                        isChangedDir[myIndex] = true;
                     direction[myIndex] = RIGHT;
-                    isChangedDir[myIndex] = true;
                 }
                 break;
             case 'q':
@@ -127,16 +146,12 @@ void *get_key(void *)
             if (isChangedDir[0])
             {
                 for (uint8_t i = 1; i < start_message->players_count; i++)
-                {
                     if (fd_all[i] != -1)
                     {
                         ssize_t size = send_server_key(fd_all[i], direction[0], names[0], names_len[0]);
                         if (size == -1)
-                        {
                             exit(EXIT_FAILURE);
-                        }
                     }
-                }
             }
 
             // Проверяем клиентские сокеты
@@ -144,11 +159,13 @@ void *get_key(void *)
             {
                 if (fd_all[i] != -1 && FD_ISSET(fd_all[i], &read_fds))
                 {
-                    uint8_t buffer;
-                    ssize_t bytes_received = recv_client_key(fd_all[i], &buffer);
+                    uint8_t bufkey = 0;
+                    ssize_t bytes_received = recv_client_key(fd_all[i], &bufkey);
+                    sprintf(buffer, "Received client key: %d from %s\n", bufkey, names[i]);
+                    log_message((char *)buffer, (char *)names[myIndex]);
                     if (bytes_received > 0)
                     {
-                        switch (buffer)
+                        switch (bufkey)
                         {
                         case UP:
                             if (y[i] != 0 && full_map[x[i]][y[i] - 1] != WALL)
@@ -185,6 +202,19 @@ void *get_key(void *)
                         default:
                             break;
                         }
+
+                        if (isChangedDir[i])
+                        {
+                            for (int index = 1; index < start_message->players_count; ++index)
+                            {
+                                if (index != i && fd_all[index] != -1)
+                                {
+                                    ssize_t size = send_server_key(fd_all[index], direction[i], names[i], names_len[i]);
+                                    if (size == -1)
+                                        exit(EXIT_FAILURE);
+                                }
+                            }
+                        }
                     }
                     else if (bytes_received == 0)
                     {
@@ -198,7 +228,7 @@ void *get_key(void *)
                     }
                 }
             }
-            // Redirect direction to all players
+            /* Redirect direction to all players
             if (isChangedDir[1] || isChangedDir[2] || isChangedDir[3])
             {
                 ssize_t size = 0;
@@ -218,6 +248,7 @@ void *get_key(void *)
                     }
                 }
             }
+            */
         }
         else
         {
@@ -225,7 +256,7 @@ void *get_key(void *)
             {
                 uint8_t buf = direction[myIndex];
                 ssize_t size = send_client_key(fd_all[1], buf);
-                sprintf(buffer, "Send key to server %d!", buf);
+                sprintf(buffer, "%s send key to server %d!", names[myIndex], buf);
                 log_message(buffer, (char *)names[myIndex]);
                 if (size == -1)
                 {
@@ -262,8 +293,6 @@ void *get_key(void *)
                     break;
                 }
                 uint8_t i = index_of_dublicate_name(name, size);
-                sprintf(buffer, "Player with name: %s, index = %d", name, i);
-                log_message(buffer, (char *)names[myIndex]);
                 free(name);
                 switch (key)
                 {
@@ -306,7 +335,7 @@ void *get_key(void *)
         }
         // Recalculate max_fd after potentially closing sockets
         max_fd = std_in;
-        for (int i = isServer ? 1 : 0; i < start_message->players_count; ++i)
+        for (int i = 0; i < start_message->players_count; ++i)
         {
             if (fd_all[i] > max_fd)
                 max_fd = fd_all[i];
@@ -453,20 +482,26 @@ uint32_t start_game(uint8_t count_of_players)
     pthread_create(&pid, NULL, *get_key, NULL);
 
     struct timeval frame_time = {0};
+    frame_time = start_time;
     gettimeofday(&start_time, NULL);
+
+    sprintf(buffer, "Starting game - %lu ms\n", CALCULATE_TIME_DIFF_MS(full_time, start_time));
+    log_message((char *)buffer, (char *)names[myIndex]);
 
     while (!done)
     {
-        /*sprintf(buffer, "took %lu ms \n", ((start_frame.tv_sec - end_frame.tv_sec) * 1000000 + start_full_frame.tv_usec - end_full_frame.tv_usec) / 1000); */
-        /*log_message((char *)buffer, NULL);*/
         gettimeofday(&frame_time, NULL);
         if (((frame_time.tv_sec - start_time.tv_sec) * 1000000 + frame_time.tv_usec - start_time.tv_usec) / 1000 >= start_message->frame_timeout)
         {
-            sprintf(buffer, "took %lu ms \n", ((frame_time.tv_sec - start_time.tv_sec) * 1000000 + frame_time.tv_usec - start_time.tv_usec) / 1000);
+            frame_count++;
+            sprintf(buffer, "Full time = %lu \t took %lu ms \n", CALCULATE_TIME_DIFF_MS(full_time, frame_time), CALCULATE_TIME_DIFF_MS(start_time, frame_time));
             log_message((char *)buffer, (char *)names[myIndex]);
 
-            start_time.tv_sec = frame_time.tv_sec;
-            start_time.tv_usec = frame_time.tv_usec;
+            add_timeval(&start_time);
+
+            sprintf(buffer, "\t CURRENT FRAME = %lu \n", frame_count);
+            log_message((char *)buffer, (char *)names[myIndex]);
+
             move_players(count_of_players);
             if (total_score == score[0] + score[1] + score[2] + score[3])
             {
@@ -504,7 +539,6 @@ uint32_t start_game(uint8_t count_of_players)
             usleep(start_message->frame_timeout - ((frame_time.tv_sec - start_time.tv_sec) * 1000000 + frame_time.tv_usec - start_time.tv_usec) / 1000);
         else
             usleep(start_message->frame_timeout / 50);
-        /*usleep(start_message->frame_timeout * 1000 - ((end_of_frame.tv_sec - start_of_frame.tv_sec) * 1000000 + end_of_frame.tv_usec - start_of_frame.tv_usec));*/
     }
 
     pthread_join(pid, NULL);
@@ -649,6 +683,8 @@ void init_game(uint8_t count_of_players, uint8_t *map, uint8_t *name)
         printf("Player 3 end game!\n");
         break;
     }
+
+    printf("\n\t Count of frames: %lu\n\n", frame_count);
 
     for (uint8_t i = 0; i < start_message->players_count; i++)
         free(names[i]);

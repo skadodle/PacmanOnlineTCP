@@ -53,15 +53,15 @@
     (((end).tv_sec - (start).tv_sec) * 1000 + ((end).tv_usec - (start).tv_usec) / 1000)
 
 // Macros for check is need to sleep
-#define TIME_TO_SLEEP_CHECK(time) ((start_message->frame_timeout * 3 / 4) <= (time))
+#define TIME_TO_SLEEP_CHECK(time) (((start_message->frame_timeout / 4) < (time)) && ((start_message->frame_timeout * 3 / 4) > (time)))
 
 // Macros for sleep and log
-#define TIME_TO_SLEEP_ACTION(time)                                                              \
-    do                                                                                          \
-    {                                                                                           \
-        sprintf(buffer, "For %lu \twait %ld ms\n", (time), TIMESTAMP - (time) + TIMESTAMP / 4); \
-        log_message(buffer, names[myIndex]);                                                    \
-        usleep((TIMESTAMP - (time) + TIMESTAMP / 4) * 1000);                                    \
+#define TIME_TO_SLEEP_ACTION(time)                                                                                                    \
+    do                                                                                                                                \
+    {                                                                                                                                 \
+        sprintf(buffer, "For %lu \twait %ld ms\n", (time), start_message->frame_timeout - (time) + start_message->frame_timeout / 2); \
+        log_message(buffer, names[myIndex]);                                                                                          \
+        usleep((start_message->frame_timeout - (time) + start_message->frame_timeout / 2) * 1000);                                    \
     } while (0)
 
 #define TIMESTAMP 350 // ms
@@ -137,6 +137,7 @@ bool start_client(uint8_t *ip, uint16_t port, uint8_t *name, uint8_t **map);
 void log_message(char *message, char *name);
 
 // GameplayPacman.c
+void add_timeval(struct timeval *start_time);
 void *get_key(void *);
 void player_send_info_constructor(uint8_t *name);
 void draw_map(uint8_t *map, int8_t count_of_players);
